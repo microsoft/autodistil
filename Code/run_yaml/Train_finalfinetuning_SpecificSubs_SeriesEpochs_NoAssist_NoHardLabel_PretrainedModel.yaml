@@ -62,7 +62,7 @@ search:
   params:
     - name: TASK_NAME
       spec: discrete
-      values: ['MRPC', 'RTE']
+      values: ['RTE']
     - name: Max_Seq_Length
       spec: discrete
       values: [128]
