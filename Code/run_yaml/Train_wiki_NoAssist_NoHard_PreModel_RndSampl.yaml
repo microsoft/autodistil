@@ -44,7 +44,7 @@ storage:
 
 search:
   job_template:
-    name: Task_wiki_NoHard_PreModel_RndSampl_Epochs_{Num_Train_Epochs}
+    name: Epochs_{Num_Train_Epochs}
     sku: G8
     command:
       - python run_wiki_NoAssist_RndSampl.py
