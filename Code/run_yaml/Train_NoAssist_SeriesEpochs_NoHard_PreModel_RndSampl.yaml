@@ -37,7 +37,7 @@ storage:
 
 search:
   job_template:
-    name: Task_{TASK_NAME}_NoAssist_NoAug_NoHard_PreModel_RndSampl_Epochs_{Num_Train_Epochs}
+    name: Epochs_{Num_Train_Epochs}
     sku: G4
     command:
       - python run_glue_NoAssist_RndSampl.py
@@ -78,7 +78,7 @@ search:
       values: [32]
     - name: Num_Train_Epochs
       spec: discrete
-      values: [2, 4, 6, 8, 10]
+      values: [2, 4, 6]
     - name: Hidden_Mult_List
       spec: discrete
       values: ['0.25,0.5,1.0']

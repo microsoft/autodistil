@@ -37,8 +37,8 @@ storage:
 
 search:
   job_template:
-    name: Phase_{Training_Phase}_Epochs_{Num_Train_Epochs}_NoA_Agnostic_MNLI_NoAug_to_{TASK_NAME}_EpochsMNLI_{Epochs_TrainMNLI}_Sub_H_{Hidden_Mult_List}_L_{Depth_Mult_List}_A_{Width_Mult_List}
-    sku: G1 #G8
+    name: FinetuneEpochs_{Num_Train_Epochs}_EpochsMNLI_{Epochs_TrainMNLI}_Sub_H_{Hidden_Mult_List}_L_{Depth_Mult_List}_A_{Width_Mult_List}
+    sku: G1
     command:
       - python run_glue_NoAssist_AutoTinyBERTLoss_AddHidDim_AddHidLoss_MNLI_to_others.py
         --model_type bert
@@ -74,7 +74,7 @@ search:
       values: [32]
     - name: Num_Train_Epochs
       spec: discrete
-      values: [3, 6, 12]
+      values: [3, 6, 9]
     - name: Hidden_Mult_List
       spec: discrete
       values: ['1.0'] # ['0.25,0.5,1.0']
