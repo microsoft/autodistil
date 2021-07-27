@@ -1,0 +1,87 @@
+description: Train_DynaBERTw
+
+target:
+  service: amlk8s
+  # run "amlt target list amlk8s" to list the names of available AMLK8s targets
+  name: itplabrr1cl1
+  vc: resrchvc
+
+environment:
+  image: pytorch/pytorch:1.0.1-cuda10.0-cudnn7-devel
+  setup:
+    - pip install -r requirements.txt
+    - pip install --user boto3
+    - pip install --user regex
+    - pip install --user sklearn
+
+code:
+  # local directory of the code. this will be uploaded to the server.
+  # $CONFIG_DIR is expanded to the directory of this config file
+  local_dir: ../
+
+data:
+  local_dir:  ../../Data_and_Models
+  remote_dir: data_and_models
+
+storage:
+  output:
+    storage_account_name: dongkuan
+    container_name: dynabert
+    mount_dir: /mnt/dynabertw
+
+search:
+  job_template:
+    name: search_{experiment_name:s}_Task_{TASK_NAME}_TrainingPhase_{Training_Phase}
+    sku: G1 #G8
+    command:
+      - python run_glue.py
+        --model_type bert
+        --task_name {TASK_NAME}
+        --do_train
+        --data_dir $$AMLT_DATA_DIR/Data_GLUE/glue_data/{TASK_NAME}/
+        --model_dir $$AMLT_DATA_DIR/Local_models/finetuned_BERTs/bert_base_uncased_mrpc/
+        --output_dir $$AMLT_OUTPUT_DIR/{TASK_NAME}/
+        --max_seq_length {Max_Seq_Length}
+        --learning_rate {LR}
+        --per_gpu_train_batch_size {Per_GPU_Train_Batch_Size}
+        --num_train_epochs {Num_Train_Epochs}
+        --width_mult_list {Width_Mult_List}
+        --width_lambda1 {Width_Lambda1}
+        --width_lambda2 {Width_Lambda2}
+        --training_phase {Training_Phase}
+  type: grid
+  max_trials: 5
+  # parallel_trials: 2 ???
+  params:
+    - name: TASK_NAME
+      spec: discrete
+      values: ['MRPC']
+    - name: Max_Seq_Length
+      spec: discrete
+      values: [128]
+    - name: LR
+      spec: discrete
+      values: [2e-5, 4e-5]
+    - name: Per_GPU_Train_Batch_Size
+      spec: discrete
+      values: [32]
+    - name: Num_Train_Epochs
+      spec: discrete
+      values: [3]
+    - name: Width_Mult_List
+      spec: discrete
+      values: ['0.25,0.5,0.75,1.0']
+    - name: Width_Lambda1
+      spec: discrete
+      values: [1.0]
+    - name: Width_Lambda2
+      spec: discrete
+      values: [0.1]
+    - name: Training_Phase
+      spec: discrete
+      values: ['dynabertw']
+
+
+
+
+

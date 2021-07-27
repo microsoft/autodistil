@@ -1,0 +1,100 @@
+description: Train_DynaBERTw_MNLI_NoAug_SeriesEpochs
+
+target:
+  service: amlk8s
+  # run "amlt target list amlk8s" to list the names of available AMLK8s targets
+  name: itphyperdgx2cl1
+  vc: hai3
+
+# target:
+#   service: amlk8s
+#   # run "amlt target list amlk8s" to list the names of available AMLK8s targets
+#   name: itplabrr1cl1
+#   vc: resrchvc
+
+environment:
+  image: pytorch/pytorch:1.6.0-cuda10.1-cudnn7-devel # pytorch/pytorch:1.0.1-cuda10.0-cudnn7-devel
+  setup:
+    - pip install -r requirements.txt
+    - pip install --user boto3
+    - pip install --user regex
+    - pip install --user sklearn
+
+code:
+  # local directory of the code. this will be uploaded to the server.
+  # $CONFIG_DIR is expanded to the directory of this config file
+  local_dir: ../
+
+data:
+  local_dir:  ../../Data_and_Models
+  remote_dir: data_and_models
+
+storage:
+  output:
+    storage_account_name: dongkuan
+    container_name: dynabert
+    # mount_dir: /mnt/dynabertw
+
+search:
+  job_template:
+    name: Task_{TASK_NAME}_TrainingPhase_{Training_Phase}_NoAug_Epochs_{Num_Train_Epochs}
+    sku: G1 #G8
+    command:
+      - python run_glue_AutoTinyBERTLoss_AddHidDim.py
+        --model_type bert
+        --task_name {TASK_NAME}
+        --do_train
+        --data_dir $$AMLT_DATA_DIR/Data_GLUE/glue_data/{TASK_NAME}/
+        --model_dir $$AMLT_DATA_DIR/Local_models/finetuned_BERTs/bert_base_uncased_MNLI/
+        --output_dir $$AMLT_OUTPUT_DIR/{TASK_NAME}/DYNABERTW_NoAug_SeriesEpochs/
+        --max_seq_length {Max_Seq_Length}
+        --learning_rate {LR}
+        --per_gpu_train_batch_size {Per_GPU_Train_Batch_Size}
+        --num_train_epochs {Num_Train_Epochs}
+        --hidden_mult_list {Hidden_Mult_List}
+        --width_lambda1 {Width_Lambda1}
+        --width_lambda3 {Width_Lambda3}
+        --width_lambda4 {Width_Lambda4}
+        --training_phase {Training_Phase}
+        --logging_steps {Logging_Steps}
+  type: grid
+  max_trials: 100
+  # parallel_trials: 2 ???
+  params:
+    - name: TASK_NAME
+      spec: discrete
+      values: ['MNLI']
+    - name: Max_Seq_Length
+      spec: discrete
+      values: [128]
+    - name: LR
+      spec: discrete
+      values: [2e-5]
+    - name: Per_GPU_Train_Batch_Size
+      spec: discrete
+      values: [32]
+    - name: Num_Train_Epochs
+      spec: discrete
+      values: [1, 2, 3, 4, 5]
+    - name: Hidden_Mult_List
+      spec: discrete
+      values: ['0.25,0.33333,0.5,1.0']
+    - name: Width_Lambda1
+      spec: discrete
+      values: [1.0]
+    - name: Width_Lambda3
+      spec: discrete
+      values: [0.01]
+    - name: Width_Lambda4
+      spec: discrete
+      values: [1.0]
+    - name: Training_Phase
+      spec: discrete
+      values: ['dynabertw']
+    - name: Logging_Steps
+      spec: discrete
+      values: [2000]
+
+
+
+
