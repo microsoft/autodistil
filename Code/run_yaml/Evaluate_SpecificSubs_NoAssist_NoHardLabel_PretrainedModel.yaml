@@ -44,7 +44,7 @@ search:
         --model_type bert
         --task_name {TASK_NAME}
         --data_dir $$AMLT_DATA_DIR/Data_GLUE/glue_data/{TASK_NAME}/
-        --model_dir $$AMLT_DATA_DIR/Outputs/glue/{TASK_NAME}/NoAssist/All_FINETUNING_NoHardLabel_PreModel/SpecificSubs/FinetuneEpochs_{Finetune_Epochs}_EpochsMNLI_{Epochs_TrainMNLI}_Sub_{Subs}/
+        --model_dir $$AMLT_DATA_DIR/Outputs/glue/{TASK_NAME}/NoAssist/All_FINETUNING_NoHardLabel_PreModel/SpecificSubs/FinetuneEpochs_{Finetune_Epochs}_Task_{TASK_NAME}_EpochsMNLI_{Epochs_TrainMNLI}_Sub_{Subs}/
         --output_dir $$AMLT_OUTPUT_DIR/
         --max_seq_length {Max_Seq_Length}
         --hidden_mult {Hidden_Mult}

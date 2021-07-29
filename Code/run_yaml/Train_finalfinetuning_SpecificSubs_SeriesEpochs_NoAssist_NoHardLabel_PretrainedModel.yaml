@@ -37,7 +37,7 @@ storage:
 
 search:
   job_template:
-    name: FinetuneEpochs_{Num_Train_Epochs}_EpochsMNLI_{Epochs_TrainMNLI}_Sub_H_{Hidden_Mult_List}_L_{Depth_Mult_List}_A_{Width_Mult_List}
+    name: FinetuneEpochs_{Num_Train_Epochs}_Task_{TASK_NAME}_EpochsMNLI_{Epochs_TrainMNLI}_Sub_H_{Hidden_Mult_List}_L_{Depth_Mult_List}_A_{Width_Mult_List}
     sku: G1
     command:
       - python run_glue_NoAssist_AutoTinyBERTLoss_AddHidDim_AddHidLoss_MNLI_to_others.py
