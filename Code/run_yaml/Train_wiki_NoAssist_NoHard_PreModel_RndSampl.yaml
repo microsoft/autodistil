@@ -26,6 +26,9 @@ environment:
     - pip install --user regex
     - pip install --user sklearn
     - pip install --user tensorflow-gpu==2.3.1
+    - git clone https://github.com/NVIDIA/apex
+    - cd apex
+    - pip install -v --disable-pip-version-check --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./
 
 code:
   # local directory of the code. this will be uploaded to the server.
