@@ -47,7 +47,7 @@ storage:
 
 search:
   job_template:
-    name: Epochs_{Num_Train_Epochs}
+    name: Epochs_{Num_Train_Epochs_WholeSet}
     sku: G16
     command:
       - python -m torch.distributed.launch --nproc_per_node=16 run_wiki_NoAssist_RndSampl.py
@@ -73,6 +73,7 @@ search:
         --logging_steps {Logging_Steps}
         --output_cache_dir $$AMLT_OUTPUT_DIR/cache
         --weight_decay {Weight_Decay}
+        --num_train_epochs_wholeset {Num_Train_Epochs_WholeSet}
   type: grid
   max_trials: 100
   # parallel_trials: 2 ???
@@ -122,3 +123,6 @@ search:
     - name: Weight_Decay
       spec: discrete
       values: [0.01]
+    - name: Num_Train_Epochs_WholeSet
+      spec: discrete
+      values: [3]

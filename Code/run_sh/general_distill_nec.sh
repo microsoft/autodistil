@@ -35,5 +35,3 @@ CUDA_VISIBLE_DEVICES=2,0,3 nohup python -u -m torch.distributed.launch --nproc_p
                           > /home/dsi/dxu/Backups/Research_Server/Working/Pretrained-Language-Model/TinyBERT/output_wiki/logs/train_supernet_wiki_distill.log 2>&1 &
 
 echo 'end'
-
- 

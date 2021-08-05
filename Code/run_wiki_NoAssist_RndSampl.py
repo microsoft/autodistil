@@ -131,7 +131,7 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
         total_train_examples += samples_per_epoch[i % len(samples_per_epoch)]
 
     num_train_optimization_steps = int(
-        total_train_examples / args.train_batch_size / args.gradient_accumulation_steps)
+        args.num_train_epochs_wholeset * total_train_examples / args.train_batch_size / args.gradient_accumulation_steps)
     if args.local_rank != -1:
         num_train_optimization_steps = num_train_optimization_steps // torch.distributed.get_world_size()
 
@@ -191,283 +191,287 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
     train_iterator = trange(int(args.num_train_epochs), desc="Epoch")
     set_seed(args)
 
-    for epoch in trange(int(args.num_train_epochs), desc="Epoch"):
-        print('')
-        print('epoch: ', epoch)
-        print('')
-        epoch_dataset = PregeneratedDataset(epoch=epoch, training_path=args.pregenerated_data, tokenizer=tokenizer,
-                                            num_data_epochs=num_data_epochs, reduce_memory=args.reduce_memory, output_cache_dir=args.output_cache_dir)
-        if args.local_rank == -1:
-            train_sampler = RandomSampler(epoch_dataset)
-        else:
-            train_sampler = DistributedSampler(epoch_dataset)
-        train_dataloader = DataLoader(epoch_dataset, sampler=train_sampler, batch_size=args.train_batch_size)
+    # loop over whole set (three epoch-data)
+    for epoch_wholeset in trange(int(args.num_train_epochs_wholeset), desc="Epoch"):
+        # loop over each epoch-data
+        for epoch in trange(int(args.num_train_epochs), desc="Epoch"):
+            print('')
+            print('epoch: ', epoch)
+            print('')
+            epoch_dataset = PregeneratedDataset(epoch=epoch, training_path=args.pregenerated_data, tokenizer=tokenizer,
+                                                num_data_epochs=num_data_epochs, reduce_memory=args.reduce_memory, output_cache_dir=args.output_cache_dir)
+            if args.local_rank == -1:
+                train_sampler = RandomSampler(epoch_dataset)
+            else:
+                train_sampler = DistributedSampler(epoch_dataset)
+            train_dataloader = DataLoader(epoch_dataset, sampler=train_sampler, batch_size=args.train_batch_size)
 
-        tr_loss    = 0.0
-        # hard_loss  = 0.0
-        # logit_loss = 0.0
-        # att_loss   = 0.0
-        # rep_loss   = 0.0
-        model.train()
-        nb_tr_examples, nb_tr_steps = 0, 0
-        with tqdm(total=len(train_dataloader), desc="Epoch {}".format(epoch)) as pbar:
-            for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration", ascii=True)):
-                batch = tuple(t.to(args.device) for t in batch)
-        
-                # current_best = 0
-                # output_eval_file = os.path.join(args.output_dir, 'eval_results.txt')
+            tr_loss    = 0.0
+            # hard_loss  = 0.0
+            # logit_loss = 0.0
+            # att_loss   = 0.0
+            # rep_loss   = 0.0
+            model.train()
+            nb_tr_examples, nb_tr_steps = 0, 0
+            with tqdm(total=len(train_dataloader), desc="Epoch {}".format(epoch)) as pbar:
+                for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration", ascii=True)):
+                    batch = tuple(t.to(args.device) for t in batch)
+            
+                    # current_best = 0
+                    # output_eval_file = os.path.join(args.output_dir, 'eval_results.txt')
 
-                # for _ in train_iterator:
-                #     epoch_iterator = tqdm(train_dataloader, desc="Iteration")
-                #     # epoch_iterator_1 = tqdm(train_dataloader_1, desc="Iteration")
-                #     for step, batch in enumerate(epoch_iterator):
-                #         print('step: ', step)
-                #         model.train()
-                #         batch = tuple(t.to(args.device) for t in batch)
+                    # for _ in train_iterator:
+                    #     epoch_iterator = tqdm(train_dataloader, desc="Iteration")
+                    #     # epoch_iterator_1 = tqdm(train_dataloader_1, desc="Iteration")
+                    #     for step, batch in enumerate(epoch_iterator):
+                    #         print('step: ', step)
+                    #         model.train()
+                    #         batch = tuple(t.to(args.device) for t in batch)
 
-                inputs = {'input_ids': batch[0], 'attention_mask': batch[1], 'labels': batch[3][:, 0],
-                        'token_type_ids': batch[2] if args.model_type in ['bert'] else None}
-                inputs_stu = {'input_ids': batch[0], 'attention_mask': batch[1], 'labels': batch[3][:, 0],
-                        'token_type_ids': batch[2] if args.model_type in ['bert'] else None, 'is_student': True}
+                    inputs = {'input_ids': batch[0], 'attention_mask': batch[1], 'labels': batch[3][:, 0],
+                            'token_type_ids': batch[2] if args.model_type in ['bert'] else None}
+                    inputs_stu = {'input_ids': batch[0], 'attention_mask': batch[1], 'labels': batch[3][:, 0],
+                            'token_type_ids': batch[2] if args.model_type in ['bert'] else None, 'is_student': True}
 
-                # # prepare the hidden states and logits of the teacher model
-                # if args.training_phase == 'dynabertw' and teacher_model:
-                #     with torch.no_grad():
-                #         # teacher_logit: [32, 2]
-                #         # len(teacher_reps) = 13; teacher_reps[0]: [32, 128, 768]
-                #         # _, teacher_logit, teacher_reps, _, _ = teacher_model(**inputs)
-                #         _, teacher_logit, teacher_reps, teacher_atts, _ = teacher_model(**inputs)
-                
-                # prepare sub-nets
-                subs_all = list(itertools.product(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list))
-                subs_sampled = [subs_all[-1], subs_all[0]] + random.sample(subs_all[1:-1], 2) # four subs: largest, smallest, two randomly sampled
-                print('subs_sampled: ', subs_sampled)
-
-                if args.training_phase == 'dynabert' and teacher_model:
-                    hidden_max_all, logits_max_all = [], []
-                    atts_max_all = []
-                    # for width_mult in sorted(args.width_mult_list, reverse=True):
-                    for hidden_mult in sorted(args.hidden_mult_list, reverse=True):
-                        with torch.no_grad():
-                            # teacher_logit: [32, 2]
-                            # len(teacher_reps) = 13; teacher_reps[0]: [32, 128, 768]
-                            # _, teacher_logit, teacher_reps, _, _ = teacher_model(**inputs)
-                            _, teacher_logit, teacher_reps, teacher_atts, _ = teacher_model(**inputs)
-                            hidden_max_all.append(teacher_reps)
-                            logits_max_all.append(teacher_logit)
-                            atts_max_all.append(teacher_atts)
-
-                # accumulate grads for all sampled sub-networks
-                for idx_sub in range(len(subs_sampled)):
-                    # print('subs_sampled[idx_sub]: ', subs_sampled[idx_sub])
-                    model.apply(lambda m: setattr(m, 'depth_mult', subs_sampled[idx_sub][0]))
+                    # # prepare the hidden states and logits of the teacher model
+                    # if args.training_phase == 'dynabertw' and teacher_model:
+                    #     with torch.no_grad():
+                    #         # teacher_logit: [32, 2]
+                    #         # len(teacher_reps) = 13; teacher_reps[0]: [32, 128, 768]
+                    #         # _, teacher_logit, teacher_reps, _, _ = teacher_model(**inputs)
+                    #         _, teacher_logit, teacher_reps, teacher_atts, _ = teacher_model(**inputs)
                     
-                    if args.training_phase == 'dynabert' or 'final_finetuning':
-                        model = model.module if hasattr(model, 'module') else model
-                        base_model = getattr(model, model.base_model_prefix, model)
-                        n_layers = base_model.config.num_hidden_layers
-                        depth = round(subs_sampled[idx_sub][0] * n_layers)
-                        kept_layers_index = []
-                        for i in range(depth):
-                            kept_layers_index.append(math.floor(i / subs_sampled[idx_sub][0]))
-                        kept_layers_index.append(n_layers)
+                    # prepare sub-nets
+                    subs_all = list(itertools.product(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list))
+                    subs_sampled = [subs_all[-1], subs_all[0]] + random.sample(subs_all[1:-1], 2) # four subs: largest, smallest, two randomly sampled
+                    print('subs_sampled: ', subs_sampled)
+
+                    if args.training_phase == 'dynabert' and teacher_model:
+                        hidden_max_all, logits_max_all = [], []
+                        atts_max_all = []
+                        # for width_mult in sorted(args.width_mult_list, reverse=True):
+                        for hidden_mult in sorted(args.hidden_mult_list, reverse=True):
+                            with torch.no_grad():
+                                # teacher_logit: [32, 2]
+                                # len(teacher_reps) = 13; teacher_reps[0]: [32, 128, 768]
+                                # _, teacher_logit, teacher_reps, _, _ = teacher_model(**inputs)
+                                _, teacher_logit, teacher_reps, teacher_atts, _ = teacher_model(**inputs)
+                                hidden_max_all.append(teacher_reps)
+                                logits_max_all.append(teacher_logit)
+                                atts_max_all.append(teacher_atts)
+
+                    # accumulate grads for all sampled sub-networks
+                    for idx_sub in range(len(subs_sampled)):
+                        # print('subs_sampled[idx_sub]: ', subs_sampled[idx_sub])
+                        model.apply(lambda m: setattr(m, 'depth_mult', subs_sampled[idx_sub][0]))
+                        
+                        if args.training_phase == 'dynabert' or 'final_finetuning':
+                            model = model.module if hasattr(model, 'module') else model
+                            base_model = getattr(model, model.base_model_prefix, model)
+                            n_layers = base_model.config.num_hidden_layers
+                            depth = round(subs_sampled[idx_sub][0] * n_layers)
+                            kept_layers_index = []
+                            for i in range(depth):
+                                kept_layers_index.append(math.floor(i / subs_sampled[idx_sub][0]))
+                            kept_layers_index.append(n_layers)
+                        
+                        model.apply(lambda m: setattr(m, 'width_mult', subs_sampled[idx_sub][1]))
+                        model.apply(lambda m: setattr(m, 'hidden_mult', subs_sampled[idx_sub][2]))
+
+                        # print('model: ', model)
+                                
+                        # stage 2: width- and depth- adaptive
+                        if args.training_phase == 'dynabert':
+                            if getattr(args, 'data_aug'):
+                                loss, student_logit, student_reps, student_atts, _ = model(**inputs_stu)
+
+                                # distillation loss of logits
+                                if args.output_mode == "classification":
+                                    # logit_loss = soft_cross_entropy(student_logit, logits_max_all[width_idx].detach())
+                                    logit_loss = soft_cross_entropy(student_logit, teacher_logit.detach())
+                                elif args.output_mode == "regression":
+                                    logit_loss = 0
+
+                                # # distillation loss of hidden states
+                                # rep_loss = 0
+                                # for student_rep, teacher_rep in zip(
+                                #         student_reps, list(hidden_max_all[width_idx][i] for i in kept_layers_index)):
+                                #     tmp_loss = loss_mse(student_rep, teacher_rep.detach())
+                                #     rep_loss += tmp_loss
+                                
+                                # last layer
+                                student_rep, teacher_rep = student_reps[-1], teacher_reps[-1]
+                                rep_loss = loss_mse(student_rep, teacher_rep.detach())
+
+                                # # distillation loss of attention
+                                # att_loss = 0
+                                # kept_layers_index
+                                #   e.g., 
+                                #       [0, 2, 4, 6, 8, 10, 12] for depth_mult = 0.5
+                                #       [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] for depth_mult = 1.0
+                                
+                                # last layer
+                                # student_att, teacher_att = student_atts[-1], atts_max_all[width_idx][kept_layers_index[-2]] # '-2'??? check it again
+                                student_att, teacher_att = student_atts[-1], teacher_atts[-1] 
+                                student_att = torch.where(student_att <= -1e2, torch.zeros_like(student_att).to(args.device),
+                                                student_att)
+                                teacher_att = torch.where(teacher_att <= -1e2, torch.zeros_like(teacher_att).to(args.device),
+                                                teacher_att)
+                                att_loss = loss_mse(torch.sum(student_att, dim=1), torch.sum(teacher_att.detach(), dim=1))
+
+                                # loss = args.depth_lambda1 * logit_loss + args.depth_lambda2 * rep_loss  # ground+truth and distillation
+                                # logit_loss could represent hard_loss ???
+                                # loss = args.depth_lambda1 * logit_loss + args.depth_lambda3 * att_loss
+                                loss = args.depth_lambda1 * logit_loss + args.depth_lambda3 * att_loss + args.depth_lambda2 * rep_loss
+                                # width_idx += 1  # move to the next width
+
+                            else: 
+                                hard_loss, student_logit, student_reps, student_atts, _ = model(**inputs_stu)
+
+                                # distillation loss of logits
+                                if args.output_mode == "classification":
+                                    # logit_loss = soft_cross_entropy(student_logit, logits_max_all[width_idx].detach())
+                                    logit_loss = soft_cross_entropy(student_logit, teacher_logit.detach())
+                                elif args.output_mode == "regression":
+                                    logit_loss = 0
+
+                                # # distillation loss of hidden states
+                                # rep_loss = 0
+                                # for student_rep, teacher_rep in zip(
+                                #         student_reps, list(hidden_max_all[width_idx][i] for i in kept_layers_index)):
+                                #     tmp_loss = loss_mse(student_rep, teacher_rep.detach())
+                                #     rep_loss += tmp_loss
+                                
+                                # last layer
+                                student_rep, teacher_rep = student_reps[-1], teacher_reps[-1]
+                                rep_loss = loss_mse(student_rep, teacher_rep.detach())
+
+                                ##  distillation loss of attention
+                                # att_loss = 0
+                                
+                                # last layer
+                                # student_att: [32, width_mult*12, 128, 128]
+                                # teacher_att: [32, 12, 128, 128]
+                                # student_att, teacher_att = student_atts[-1], atts_max_all[width_idx][kept_layers_index[-2]] # '-2'??? check it again
+                                student_att, teacher_att = student_atts[-1], teacher_atts[-1]
+                                student_att = torch.where(student_att <= -1e2, torch.zeros_like(student_att).to(args.device),
+                                                student_att)
+                                teacher_att = torch.where(teacher_att <= -1e2, torch.zeros_like(teacher_att).to(args.device),
+                                                teacher_att)
+                                att_loss = loss_mse(torch.sum(student_att, dim=1), torch.sum(teacher_att.detach(), dim=1))
+
+                                # loss = args.depth_lambda1 * logit_loss + args.depth_lambda2 * rep_loss  # ground+truth and distillation
+                                # logit_loss could represent hard_loss ???
+                                # loss = args.depth_lambda4 * hard_loss + args.depth_lambda1 * logit_loss + args.depth_lambda3 * att_loss
+                                loss = args.depth_lambda4 * hard_loss + args.depth_lambda1 * logit_loss + args.depth_lambda3 * att_loss + args.depth_lambda2 * rep_loss
+                                # width_idx += 1  # move to the next width
+
+                                # if (global_step + 1) % args.printloss_step == 0:
+                                #     print("------------Global_step {}----------".format(global_step))
+                                #     print("total loss", loss.item())
+                                #     print("hard_loss", hard_loss.item())
+                                #     print("logit_loss", logit_loss.item())
+                                #     print("att_loss", att_loss.item())
+                                #     print("rep_loss", rep_loss.item())
+
+                        # stage 3: final finetuning
+                        else:
+                            loss = model(**inputs_stu)[0]
+
+                        print('loss: ', loss)
+                        if args.n_gpu > 1:
+                            loss = loss.mean()
+                        if args.gradient_accumulation_steps > 1:
+                            loss = loss / args.gradient_accumulation_steps
+
+                        # loss.backward()
+                        
+                        # added from TinyBERT (DK)
+                        if args.fp16:
+                            optimizer.backward(loss)
+                        else:
+                            loss.backward()
                     
-                    model.apply(lambda m: setattr(m, 'width_mult', subs_sampled[idx_sub][1]))
-                    model.apply(lambda m: setattr(m, 'hidden_mult', subs_sampled[idx_sub][2]))
+                    # clip the accumulated grad from all widths
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                    tr_loss += loss.item()
+                    nb_tr_steps += 1
+                    pbar.update(1)
 
-                    # print('model: ', model)
-                            
-                    # stage 2: width- and depth- adaptive
-                    if args.training_phase == 'dynabert':
-                        if getattr(args, 'data_aug'):
-                            loss, student_logit, student_reps, student_atts, _ = model(**inputs_stu)
+                    mean_loss = tr_loss * args.gradient_accumulation_steps / nb_tr_steps
 
-                            # distillation loss of logits
-                            if args.output_mode == "classification":
-                                # logit_loss = soft_cross_entropy(student_logit, logits_max_all[width_idx].detach())
-                                logit_loss = soft_cross_entropy(student_logit, teacher_logit.detach())
-                            elif args.output_mode == "regression":
-                                logit_loss = 0
+                    if (step + 1) % args.gradient_accumulation_steps == 0:
+                        optimizer.step()
+                        scheduler.step()  # Update learning rate schedule
+                        model.zero_grad()
+                        global_step += 1
 
-                            # # distillation loss of hidden states
-                            # rep_loss = 0
-                            # for student_rep, teacher_rep in zip(
-                            #         student_reps, list(hidden_max_all[width_idx][i] for i in kept_layers_index)):
-                            #     tmp_loss = loss_mse(student_rep, teacher_rep.detach())
-                            #     rep_loss += tmp_loss
-                            
-                            # last layer
-                            student_rep, teacher_rep = student_reps[-1], teacher_reps[-1]
-                            rep_loss = loss_mse(student_rep, teacher_rep.detach())
-
-                            # # distillation loss of attention
-                            # att_loss = 0
-                            # kept_layers_index
-                            #   e.g., 
-                            #       [0, 2, 4, 6, 8, 10, 12] for depth_mult = 0.5
-                            #       [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] for depth_mult = 1.0
-                            
-                            # last layer
-                            # student_att, teacher_att = student_atts[-1], atts_max_all[width_idx][kept_layers_index[-2]] # '-2'??? check it again
-                            student_att, teacher_att = student_atts[-1], teacher_atts[-1] 
-                            student_att = torch.where(student_att <= -1e2, torch.zeros_like(student_att).to(args.device),
-                                            student_att)
-                            teacher_att = torch.where(teacher_att <= -1e2, torch.zeros_like(teacher_att).to(args.device),
-                                            teacher_att)
-                            att_loss = loss_mse(torch.sum(student_att, dim=1), torch.sum(teacher_att.detach(), dim=1))
-
-                            # loss = args.depth_lambda1 * logit_loss + args.depth_lambda2 * rep_loss  # ground+truth and distillation
-                            # logit_loss could represent hard_loss ???
-                            # loss = args.depth_lambda1 * logit_loss + args.depth_lambda3 * att_loss
-                            loss = args.depth_lambda1 * logit_loss + args.depth_lambda3 * att_loss + args.depth_lambda2 * rep_loss
-                            # width_idx += 1  # move to the next width
-
-                        else: 
-                            hard_loss, student_logit, student_reps, student_atts, _ = model(**inputs_stu)
-
-                            # distillation loss of logits
-                            if args.output_mode == "classification":
-                                # logit_loss = soft_cross_entropy(student_logit, logits_max_all[width_idx].detach())
-                                logit_loss = soft_cross_entropy(student_logit, teacher_logit.detach())
-                            elif args.output_mode == "regression":
-                                logit_loss = 0
-
-                            # # distillation loss of hidden states
-                            # rep_loss = 0
-                            # for student_rep, teacher_rep in zip(
-                            #         student_reps, list(hidden_max_all[width_idx][i] for i in kept_layers_index)):
-                            #     tmp_loss = loss_mse(student_rep, teacher_rep.detach())
-                            #     rep_loss += tmp_loss
-                            
-                            # last layer
-                            student_rep, teacher_rep = student_reps[-1], teacher_reps[-1]
-                            rep_loss = loss_mse(student_rep, teacher_rep.detach())
-
-                            ##  distillation loss of attention
-                            # att_loss = 0
-                            
-                            # last layer
-                            # student_att: [32, width_mult*12, 128, 128]
-                            # teacher_att: [32, 12, 128, 128]
-                            # student_att, teacher_att = student_atts[-1], atts_max_all[width_idx][kept_layers_index[-2]] # '-2'??? check it again
-                            student_att, teacher_att = student_atts[-1], teacher_atts[-1]
-                            student_att = torch.where(student_att <= -1e2, torch.zeros_like(student_att).to(args.device),
-                                            student_att)
-                            teacher_att = torch.where(teacher_att <= -1e2, torch.zeros_like(teacher_att).to(args.device),
-                                            teacher_att)
-                            att_loss = loss_mse(torch.sum(student_att, dim=1), torch.sum(teacher_att.detach(), dim=1))
-
-                            # loss = args.depth_lambda1 * logit_loss + args.depth_lambda2 * rep_loss  # ground+truth and distillation
-                            # logit_loss could represent hard_loss ???
-                            # loss = args.depth_lambda4 * hard_loss + args.depth_lambda1 * logit_loss + args.depth_lambda3 * att_loss
-                            loss = args.depth_lambda4 * hard_loss + args.depth_lambda1 * logit_loss + args.depth_lambda3 * att_loss + args.depth_lambda2 * rep_loss
-                            # width_idx += 1  # move to the next width
-
-                            # if (global_step + 1) % args.printloss_step == 0:
-                            #     print("------------Global_step {}----------".format(global_step))
-                            #     print("total loss", loss.item())
-                            #     print("hard_loss", hard_loss.item())
-                            #     print("logit_loss", logit_loss.item())
-                            #     print("att_loss", att_loss.item())
-                            #     print("rep_loss", rep_loss.item())
-
-                    # stage 3: final finetuning
-                    else:
-                        loss = model(**inputs_stu)[0]
-
-                    print('loss: ', loss)
-                    if args.n_gpu > 1:
-                        loss = loss.mean()
-                    if args.gradient_accumulation_steps > 1:
-                        loss = loss / args.gradient_accumulation_steps
-
-                    # loss.backward()
-
-                    # added from TinyBERT (DK)
-                    if args.fp16:
-                        optimizer.backward(loss)
-                    else:
-                        loss.backward()
-                
-                # clip the accumulated grad from all widths
-                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-                tr_loss += loss.item()
-                nb_tr_steps += 1
-                pbar.update(1)
-
-                mean_loss = tr_loss * args.gradient_accumulation_steps / nb_tr_steps
-
-                if (step + 1) % args.gradient_accumulation_steps == 0:
-                    optimizer.step()
-                    scheduler.step()  # Update learning rate schedule
-                    model.zero_grad()
-                    global_step += 1
-
-                    # save
-                    if global_step > 0 and args.logging_steps > 0 and global_step % args.logging_steps == 0:
-                        logger.info("Saving model checkpoint to %s", args.output_dir)
-                        model_to_save = model.module if hasattr(model, 'module') else model
-                        model_to_save.save_pretrained(args.output_dir)
-                        torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))
-                        model_to_save.config.to_json_file(os.path.join(args.output_dir, CONFIG_NAME))
-                        tokenizer.save_vocabulary(args.output_dir)
+                        # # save
+                        # if global_step > 0 and args.logging_steps > 0 and global_step % args.logging_steps == 0:
+                        #     logger.info("Saving model checkpoint to %s", args.output_dir)
+                        #     model_to_save = model.module if hasattr(model, 'module') else model
+                        #     model_to_save.save_pretrained(args.output_dir)
+                        #     torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))
+                        #     model_to_save.config.to_json_file(os.path.join(args.output_dir, CONFIG_NAME))
+                        #     tokenizer.save_vocabulary(args.output_dir)
 
 
-                    # # evaluate
-                    # if global_step > 0 and args.logging_steps > 0 and global_step % args.logging_steps == 0:
-                    #     print('Evaluate: global_step is ', global_step)
-                    #     if args.evaluate_during_training:
-                    #         acc = []
-                    #         if args.task_name == "mnli":   # for both MNLI-m and MNLI-mm
-                    #             acc_both = []
+                        # # evaluate
+                        # if global_step > 0 and args.logging_steps > 0 and global_step % args.logging_steps == 0:
+                        #     print('Evaluate: global_step is ', global_step)
+                        #     if args.evaluate_during_training:
+                        #         acc = []
+                        #         if args.task_name == "mnli":   # for both MNLI-m and MNLI-mm
+                        #             acc_both = []
 
-                    #         # collect performance of all sub-networks
-                    #         for depth_mult in sorted(args.depth_mult_list, reverse=True):
-                    #             model.apply(lambda m: setattr(m, 'depth_mult', depth_mult))
-                    #             for width_mult in sorted(args.width_mult_list, reverse=True):
-                    #                 model.apply(lambda m: setattr(m, 'width_mult', width_mult))
-                    #                 for hidden_mult in sorted(args.hidden_mult_list, reverse=True):
-                    #                     model.apply(lambda m: setattr(m, 'hidden_mult', hidden_mult))
+                        #         # collect performance of all sub-networks
+                        #         for depth_mult in sorted(args.depth_mult_list, reverse=True):
+                        #             model.apply(lambda m: setattr(m, 'depth_mult', depth_mult))
+                        #             for width_mult in sorted(args.width_mult_list, reverse=True):
+                        #                 model.apply(lambda m: setattr(m, 'width_mult', width_mult))
+                        #                 for hidden_mult in sorted(args.hidden_mult_list, reverse=True):
+                        #                     model.apply(lambda m: setattr(m, 'hidden_mult', hidden_mult))
 
-                    #                     results = evaluate(args, model, tokenizer)
-                    #                     # print("results: ", results)
+                        #                     results = evaluate(args, model, tokenizer)
+                        #                     # print("results: ", results)
 
-                    #                     logger.info("********** start evaluate results *********")
-                    #                     logger.info("depth_mult: %s ", depth_mult)
-                    #                     logger.info("width_mult: %s ", width_mult)
-                    #                     logger.info("hidden_mult: %s ", hidden_mult)
-                    #                     logger.info("results: %s ", results)
-                    #                     logger.info("********** end evaluate results *********")
+                        #                     logger.info("********** start evaluate results *********")
+                        #                     logger.info("depth_mult: %s ", depth_mult)
+                        #                     logger.info("width_mult: %s ", width_mult)
+                        #                     logger.info("hidden_mult: %s ", hidden_mult)
+                        #                     logger.info("results: %s ", results)
+                        #                     logger.info("********** end evaluate results *********")
 
-                    #                     acc.append(list(results.values())[0])
-                    #                     if args.task_name == "mnli":
-                    #                         acc_both.append(list(results.values())[0:2])
+                        #                     acc.append(list(results.values())[0])
+                        #                     if args.task_name == "mnli":
+                        #                         acc_both.append(list(results.values())[0:2])
 
-                            # # save model
-                            # if sum(acc) > current_best:
-                            #     current_best = sum(acc)
-                            #     if args.task_name == "mnli":
-                            #         print("***best***{}\n".format(acc_both))
-                            #         with open(output_eval_file, "a") as writer:
-                            #             writer.write("{}\n".format(acc_both))
-                            #     else:
-                            #         print("***best***{}\n".format(acc))
-                            #         with open(output_eval_file, "a") as writer:
-                            #             writer.write("{}\n" .format(acc))
+                                # # save model
+                                # if sum(acc) > current_best:
+                                #     current_best = sum(acc)
+                                #     if args.task_name == "mnli":
+                                #         print("***best***{}\n".format(acc_both))
+                                #         with open(output_eval_file, "a") as writer:
+                                #             writer.write("{}\n".format(acc_both))
+                                #     else:
+                                #         print("***best***{}\n".format(acc))
+                                #         with open(output_eval_file, "a") as writer:
+                                #             writer.write("{}\n" .format(acc))
 
-                            #     logger.info("Saving model checkpoint to %s", args.output_dir)
-                            #     model_to_save = model.module if hasattr(model, 'module') else model
-                            #     model_to_save.save_pretrained(args.output_dir)
-                            #     torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))
-                            #     model_to_save.config.to_json_file(os.path.join(args.output_dir, CONFIG_NAME))
-                            #     tokenizer.save_vocabulary(args.output_dir)
-
-            # logger.info("Saving model checkpoint to %s", args.output_dir)
-            # model_to_save = model.module if hasattr(model, 'module') else model
-            # model_to_save.save_pretrained(args.output_dir)
-            # torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))
-            # model_to_save.config.to_json_file(os.path.join(args.output_dir, CONFIG_NAME))
-            # tokenizer.save_vocabulary(args.output_dir)
+                                #     logger.info("Saving model checkpoint to %s", args.output_dir)
+                                #     model_to_save = model.module if hasattr(model, 'module') else model
+                                #     model_to_save.save_pretrained(args.output_dir)
+                                #     torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))
+                                #     model_to_save.config.to_json_file(os.path.join(args.output_dir, CONFIG_NAME))
+                                #     tokenizer.save_vocabulary(args.output_dir)
+            
+            # save after each epoch-data
+            logger.info("Saving model checkpoint to %s", args.output_dir)
+            model_to_save = model.module if hasattr(model, 'module') else model
+            model_to_save.save_pretrained(args.output_dir)
+            torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))
+            model_to_save.config.to_json_file(os.path.join(args.output_dir, CONFIG_NAME))
+            tokenizer.save_vocabulary(args.output_dir)
 
 
 def evaluate(args, model, tokenizer, prefix=""):
@@ -877,6 +881,9 @@ def main():
     parser.add_argument("--no_cuda",
                         action='store_true',
                         help="Whether not to use CUDA when available")
+    parser.add_argument("--num_train_epochs_wholeset", default=3.0, type=float,
+                        help="Total number of training epochs to perform.")
+
 
     args = parser.parse_args()
 
