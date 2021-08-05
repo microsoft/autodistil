@@ -195,9 +195,6 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
     for epoch_wholeset in trange(int(args.num_train_epochs_wholeset), desc="Epoch"):
         # loop over each epoch-data
         for epoch in trange(int(args.num_train_epochs), desc="Epoch"):
-            print('')
-            print('epoch: ', epoch)
-            print('')
             epoch_dataset = PregeneratedDataset(epoch=epoch, training_path=args.pregenerated_data, tokenizer=tokenizer,
                                                 num_data_epochs=num_data_epochs, reduce_memory=args.reduce_memory, output_cache_dir=args.output_cache_dir)
             if args.local_rank == -1:
@@ -216,7 +213,11 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
             with tqdm(total=len(train_dataloader), desc="Epoch {}".format(epoch)) as pbar:
                 for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration", ascii=True)):
                     batch = tuple(t.to(args.device) for t in batch)
-            
+
+                    # debug 
+                    if step == 2:
+                        break
+
                     # current_best = 0
                     # output_eval_file = os.path.join(args.output_dir, 'eval_results.txt')
 
@@ -465,13 +466,40 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                                 #     model_to_save.config.to_json_file(os.path.join(args.output_dir, CONFIG_NAME))
                                 #     tokenizer.save_vocabulary(args.output_dir)
             
-            # save after each epoch-data
-            logger.info("Saving model checkpoint to %s", args.output_dir)
-            model_to_save = model.module if hasattr(model, 'module') else model
-            model_to_save.save_pretrained(args.output_dir)
-            torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))
-            model_to_save.config.to_json_file(os.path.join(args.output_dir, CONFIG_NAME))
-            tokenizer.save_vocabulary(args.output_dir)
+        # save after each epoch of whole data
+        
+        # logger.info("Saving model checkpoint to %s", args.output_dir)
+        # model_to_save = model.module if hasattr(model, 'module') else model
+        # model_to_save.save_pretrained(args.output_dir)
+        # torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))
+        # model_to_save.config.to_json_file(os.path.join(args.output_dir, CONFIG_NAME))
+        # tokenizer.save_vocabulary(args.output_dir)
+
+        # model_name = "epoch_{}_{}".format(epoch_wholeset, WEIGHTS_NAME)
+        # logging.info("** ** * Saving fine-tuned model ** ** * ")
+        # model_to_save = model.module if hasattr(model, 'module') else model
+        # output_model_file = os.path.join(args.output_dir, model_name)
+        # output_config_file = os.path.join(args.output_dir, CONFIG_NAME)
+        # torch.save(model_to_save.state_dict(), output_model_file)
+        # model_to_save.config.to_json_file(output_config_file)
+        # tokenizer.save_vocabulary(args.output_dir)
+        # torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))
+
+        if not os.path.exists(os.path.join(args.output_dir, "epoch_{}/".format(epoch_wholeset))):
+            os.makedirs(os.path.join(args.output_dir, "epoch_{}/".format(epoch_wholeset)))
+
+        model_name = "epoch_{}/{}".format(epoch_wholeset, WEIGHTS_NAME)
+        config_name = "epoch_{}/{}".format(epoch_wholeset, CONFIG_NAME)
+
+        logging.info("** ** * Saving fine-tuned model ** ** * ")
+        model_to_save = model.module if hasattr(model, 'module') else model
+        output_model_file = os.path.join(args.output_dir, model_name)
+        output_config_file = os.path.join(args.output_dir, config_name)
+        torch.save(model_to_save.state_dict(), output_model_file)
+        model_to_save.config.to_json_file(output_config_file)
+
+        tokenizer.save_vocabulary(os.path.join(args.output_dir, "epoch_{}/".format(epoch_wholeset)))
+        torch.save(args, os.path.join(args.output_dir, "epoch_{}/".format(epoch_wholeset), 'training_args.bin'))
 
 
 def evaluate(args, model, tokenizer, prefix=""):

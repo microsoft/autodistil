@@ -70,7 +70,6 @@ search:
         --depth_lambda3 {Depth_Lambda3}
         --depth_lambda4 {Depth_Lambda4}
         --training_phase {Training_Phase}
-        --logging_steps {Logging_Steps}
         --output_cache_dir $$AMLT_OUTPUT_DIR/cache
         --weight_decay {Weight_Decay}
         --num_train_epochs_wholeset {Num_Train_Epochs_WholeSet}
@@ -117,12 +116,9 @@ search:
     - name: Training_Phase
       spec: discrete
       values: ['dynabert']
-    - name: Logging_Steps
-      spec: discrete
-      values: [20000]
     - name: Weight_Decay
       spec: discrete
       values: [0.01]
     - name: Num_Train_Epochs_WholeSet
       spec: discrete
-      values: [3]
+      values: [2]
