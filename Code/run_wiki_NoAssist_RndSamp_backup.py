@@ -157,32 +157,13 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
     optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=1e-8)
     scheduler = WarmupLinearSchedule(optimizer, warmup_steps=args.warmup_steps, t_total=t_total)
 
-
-    # if args.n_gpu > 1:
-    #     print()
-    #     print('DataParallel!')
-    #     print()
-    #     model = torch.nn.DataParallel(model)
-    #     if teacher_model != None:
-    #         teacher_model = torch.nn.DataParallel(teacher_model)
-
-    # added from TinyBERT (DK)
-    if args.local_rank != -1:
-        print("DDP!!!")
-        try:
-            from apex.parallel import DistributedDataParallel as DDP
-        except ImportError:
-            raise ImportError(
-                "Please install apex from https://www.github.com/nvidia/apex to use distributed and fp16 training.")
-        if teacher_model != None:
-            teacher_model = DDP(teacher_model)
-        model = DDP(model)
-    elif n_gpu > 1:
-        print("torch.nn.DataParallel!!!")
+    if args.n_gpu > 1:
+        print()
+        print('DataParallel!')
+        print()
         model = torch.nn.DataParallel(model)
         if teacher_model != None:
             teacher_model = torch.nn.DataParallel(teacher_model)
-
 
     global_step = 0
     model.zero_grad()
@@ -863,10 +844,6 @@ def main():
                         default=-1,
                         help="local_rank for distributed training on gpus")
 
-    parser.add_argument('--fp16',
-                        action='store_true',
-                        help="Whether to use 16-bit float precision instead of 32-bit")
-
     args = parser.parse_args()
 
     args.width_mult_list = [float(width) for width in args.width_mult_list.split(',')]
@@ -894,33 +871,12 @@ def main():
 
     print('args.local_rank: ', args.local_rank)
 
+
     # Setup CUDA, GPU & distributed training
-    # device = torch.device("cuda" if torch.cuda.is_available()  else "cpu")
-    # args.n_gpu = torch.cuda.device_count()
-    # print('n_gpu: ', args.n_gpu)
-    # args.device = device
-
-    # added from TinyBERT (DK)
-    if args.local_rank == -1 or args.no_cuda:
-        device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
-        n_gpu = torch.cuda.device_count()
-    else:
-        torch.cuda.set_device(args.local_rank)
-        device = torch.device("cuda", args.local_rank)
-        n_gpu = 1
-        # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
-        torch.distributed.init_process_group(backend='nccl')
-
-    # logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
-    #                     datefmt='%m/%d/%Y %H:%M:%S',
-    #                     level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
-
-    logger.info("device: {} n_gpu: {}, distributed training: {}, 16-bits training: {}".format(
-        device, n_gpu, bool(args.local_rank != -1), args.fp16))
-
-    args.n_gpu = n_gpu
+    device = torch.device("cuda" if torch.cuda.is_available()  else "cpu")
+    args.n_gpu = torch.cuda.device_count()
+    print('n_gpu: ', args.n_gpu)
     args.device = device
-
 
     # Set seed
     set_seed(args)
@@ -956,7 +912,6 @@ def main():
 
     # load student model if necessary
     model = model_class.from_pretrained(args.model_dir, config=config)
-
     # # print('model: ', model)
     # s = model.state_dict()
     # s = {k:v for k,v in s.items() if not k.startswith('classifier')}
