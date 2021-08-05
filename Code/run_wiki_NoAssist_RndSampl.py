@@ -379,7 +379,13 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                     if args.gradient_accumulation_steps > 1:
                         loss = loss / args.gradient_accumulation_steps
 
-                    loss.backward()
+                    # loss.backward()
+                    
+                    # added from TinyBERT (DK)
+                    if args.fp16:
+                        optimizer.backward(loss)
+                    else:
+                        loss.backward()
                 
                 # clip the accumulated grad from all widths
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
