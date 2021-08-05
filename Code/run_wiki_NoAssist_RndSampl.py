@@ -380,7 +380,7 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                         loss = loss / args.gradient_accumulation_steps
 
                     # loss.backward()
-                    
+
                     # added from TinyBERT (DK)
                     if args.fp16:
                         optimizer.backward(loss)
@@ -741,9 +741,9 @@ class PregeneratedDataset(Dataset):
         with data_file.open() as f:
             for i, line in enumerate(tqdm(f, total=num_samples, desc="Training examples")):
                 
-                # if i == 100:
-                #     break
-                if i % 100000 == 0:
+                if i == 100:
+                    break
+                if i % 10 == 0:
                     print("line i: ", i)
 
                 line = line.strip()
