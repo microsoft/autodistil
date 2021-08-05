@@ -169,14 +169,16 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
     # added from TinyBERT (DK)
     if args.local_rank != -1:
         print("DDP!!!")
-        try:
-            from apex.parallel import DistributedDataParallel as DDP
-        except ImportError:
-            raise ImportError(
-                "Please install apex from https://www.github.com/nvidia/apex to use distributed and fp16 training.")
+        # try:
+        #     from apex.parallel import DistributedDataParallel as DDP
+        # except ImportError:
+        #     raise ImportError(
+        #         "Please install apex from https://www.github.com/nvidia/apex to use distributed and fp16 training.")
         if teacher_model != None:
-            teacher_model = DDP(teacher_model)
-        model = DDP(model)
+            # teacher_model = DDP(teacher_model)
+            teacher_model = torch.nn.parallel.DistributedDataParallel(teacher_model, device_ids=[args.local_rank], output_device=args.local_rank)
+        #model = DDP(model)
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
     elif n_gpu > 1:
         print("torch.nn.DataParallel!!!")
         model = torch.nn.DataParallel(model)
@@ -872,6 +874,9 @@ def main():
     parser.add_argument('--fp16',
                         action='store_true',
                         help="Whether to use 16-bit float precision instead of 32-bit")
+    parser.add_argument("--no_cuda",
+                        action='store_true',
+                        help="Whether not to use CUDA when available")
 
     args = parser.parse_args()
 
