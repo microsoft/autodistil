@@ -245,7 +245,7 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                     # prepare sub-nets
                     subs_all = list(itertools.product(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list))
                     subs_sampled = [subs_all[-1], subs_all[0]] + random.sample(subs_all[1:-1], 2) # four subs: largest, smallest, two randomly sampled
-                    print('subs_sampled: ', subs_sampled)
+                    # print('subs_sampled: ', subs_sampled)
 
                     if args.training_phase == 'dynabert' and teacher_model:
                         hidden_max_all, logits_max_all = [], []
@@ -775,10 +775,10 @@ class PregeneratedDataset(Dataset):
         with data_file.open() as f:
             for i, line in enumerate(tqdm(f, total=num_samples, desc="Training examples")):
                 
-                if i == 100:
-                    break
-                if i % 10 == 0:
-                    print("line i: ", i)
+                # if i == 100:
+                #     break
+                # if i % 10 == 0:
+                #     print("line i: ", i)
 
                 line = line.strip()
                 example = json.loads(line)

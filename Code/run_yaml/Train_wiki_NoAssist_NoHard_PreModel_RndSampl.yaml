@@ -94,13 +94,13 @@ search:
       values: [3]
     - name: Hidden_Mult_List
       spec: discrete
-      values: ['0.25,0.5,1.0']
+      values: ['0.08333,0.16667,0.25,0.33333,0.41667,0.5,0.58333,0.66667,0.75,0.83333,0.91667,1.0'] # hidden_sizes: [1/12, 2/12, ..., 12/12] * 768
     - name: Depth_Mult_List
       spec: discrete
-      values: ['0.25,0.33333,0.5']
+      values: ['0.08333,0.16667,0.25,0.33333,0.41667,0.5'] # layer_numbers: [1/12, 2/12, ..., 6/12] * 12
     - name: Width_Mult_List
       spec: discrete
-      values: ['0.5,0.66667,1.0']
+      values: ['0.08333,0.16667,0.25,0.33333,0.41667,0.5,0.58333,0.66667,0.75,0.83333,0.91667,1.0'] # head_numbers: [1/12, 2/12, ..., 12/12] * 12
     - name: Depth_Lambda1
       spec: discrete
       values: [1.0]
@@ -121,4 +121,4 @@ search:
       values: [0.01]
     - name: Num_Train_Epochs_WholeSet
       spec: discrete
-      values: [2]
+      values: [10]
