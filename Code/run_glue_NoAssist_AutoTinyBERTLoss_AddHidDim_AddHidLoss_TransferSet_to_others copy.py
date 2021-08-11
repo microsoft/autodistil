@@ -23,15 +23,11 @@ from __future__ import absolute_import, division, print_function
 import argparse
 import logging
 import os
-import random, itertools
+import random
 import math
 import numpy as np
 import torch
-from collections import namedtuple
-from tempfile import TemporaryDirectory
-from pathlib import Path
-from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler, TensorDataset, Dataset)
-from torch.utils.data.distributed import DistributedSampler
+from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler, TensorDataset)
 from tqdm import tqdm, trange
 from torch.nn import  MSELoss
 
@@ -48,7 +44,6 @@ from transformers import glue_processors as processors
 from transformers import glue_convert_examples_to_features as convert_examples_to_features
 
 import sys
-import json
 
 logger = logging.getLogger(__name__)
 CONFIG_NAME = "config.json"
@@ -119,40 +114,25 @@ def batch_list_to_batch_tensors(features):
     return batch_tensors
 
 
-def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, num_data_epochs=None):
+def train(args, train_dataset, model, tokenizer, teacher_model=None):
     """ Train the model """
-    
+
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
-    
-    # added from TinyBERT (DK)
-    total_train_examples = 0
-    for i in range(int(args.num_train_epochs)):
-        # The modulo takes into account the fact that we may loop over limited epochs of data
-        total_train_examples += samples_per_epoch[i % len(samples_per_epoch)]
+    train_sampler = RandomSampler(train_dataset)
+    train_dataloader = DataLoader(train_dataset, sampler=train_sampler,
+                                  batch_size=args.train_batch_size)
+    # train_dataloader_1 = DataLoader(train_dataset, sampler=train_sampler, batch_size=args.train_batch_size, num_workers=0, pin_memory=False, collate_fn=batch_list_to_batch_tensors)
 
-    num_train_optimization_steps = int(
-        args.num_train_epochs_wholeset * total_train_examples / args.train_batch_size / args.gradient_accumulation_steps)
-    if args.local_rank != -1:
-        num_train_optimization_steps = num_train_optimization_steps // torch.distributed.get_world_size()
-
-    print("")
-    print("torch.distributed.get_world_size(): ", torch.distributed.get_world_size())
-    print("torch.cuda.device_count(): ", torch.cuda.device_count())
-    print("")
-
-    # train_sampler = RandomSampler(train_dataset)
-    # train_dataloader = DataLoader(train_dataset, sampler=train_sampler,
-    #                               batch_size=args.train_batch_size)
-    # # train_dataloader_1 = DataLoader(train_dataset, sampler=train_sampler, batch_size=args.train_batch_size, num_workers=0, pin_memory=False, collate_fn=batch_list_to_batch_tensors)
-
-    # t_total = len(train_dataloader) // args.gradient_accumulation_steps * args.num_train_epochs
-    t_total = num_train_optimization_steps
+    t_total = len(train_dataloader) // args.gradient_accumulation_steps * args.num_train_epochs
+    # print('')
+    # print('t_total: ', t_total)
+    # print('')
 
     # Prepare optimizer and schedule (linear warmup and decay)
     if args.model_type == 'roberta':
         args.warmup_steps = int(t_total*0.06)
 
-    no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
+    no_decay = ['bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
         {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
          'weight_decay': args.weight_decay},
@@ -162,132 +142,168 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
     optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=1e-8)
     scheduler = WarmupLinearSchedule(optimizer, warmup_steps=args.warmup_steps, t_total=t_total)
 
-
-    # if args.n_gpu > 1:
-    #     print()
-    #     print('DataParallel!')
-    #     print()
-    #     model = torch.nn.DataParallel(model)
-    #     if teacher_model != None:
-    #         teacher_model = torch.nn.DataParallel(teacher_model)
-
-    # added from TinyBERT (DK)
-    if args.local_rank != -1:
-        print("DDP!!!")
-        # try:
-        #     from apex.parallel import DistributedDataParallel as DDP
-        # except ImportError:
-        #     raise ImportError(
-        #         "Please install apex from https://www.github.com/nvidia/apex to use distributed and fp16 training.")
-        if teacher_model != None:
-            # teacher_model = DDP(teacher_model)
-            teacher_model = torch.nn.parallel.DistributedDataParallel(teacher_model, device_ids=[args.local_rank], output_device=args.local_rank)
-        #model = DDP(model)
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
-    elif n_gpu > 1:
-        print("torch.nn.DataParallel!!!")
+    if args.n_gpu > 1:
         model = torch.nn.DataParallel(model)
-        if teacher_model != None:
-            teacher_model = torch.nn.DataParallel(teacher_model)
-
 
     global_step = 0
+    tr_loss = 0.0
     model.zero_grad()
     train_iterator = trange(int(args.num_train_epochs), desc="Epoch")
     set_seed(args)
 
-    # loop over whole set (three epoch-data)
-    for epoch_wholeset in trange(int(args.num_train_epochs_wholeset), desc="Epoch"):
-        # loop over each epoch-data
-        for epoch in trange(int(args.num_train_epochs), desc="Epoch"):
-            epoch_dataset = PregeneratedDataset(epoch=epoch, training_path=args.pregenerated_data, tokenizer=tokenizer,
-                                                num_data_epochs=num_data_epochs, reduce_memory=args.reduce_memory, output_cache_dir=args.output_cache_dir, local_rank=args.local_rank)
-            if args.local_rank == -1:
-                train_sampler = RandomSampler(epoch_dataset)
-            else:
-                train_sampler = DistributedSampler(epoch_dataset)
-            train_dataloader = DataLoader(epoch_dataset, sampler=train_sampler, batch_size=args.train_batch_size)
+    current_best = 0
+    output_eval_file = os.path.join(args.output_dir, 'eval_results.txt')
 
-            tr_loss    = 0.0
-            # hard_loss  = 0.0
-            # logit_loss = 0.0
-            # att_loss   = 0.0
-            # rep_loss   = 0.0
+    for _ in train_iterator:
+        epoch_iterator = tqdm(train_dataloader, desc="Iteration")
+        # epoch_iterator_1 = tqdm(train_dataloader_1, desc="Iteration")
+        for step, batch in enumerate(epoch_iterator):
+            print('step: ', step)
             model.train()
-            nb_tr_examples, nb_tr_steps = 0, 0
-            with tqdm(total=len(train_dataloader), desc="Epoch {}".format(epoch)) as pbar:
-                for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration", ascii=True)):
-                    batch = tuple(t.to(args.device) for t in batch)
+            batch = tuple(t.to(args.device) for t in batch)
+            inputs = {'input_ids': batch[0], 'attention_mask': batch[1], 'labels': batch[3],
+                      'token_type_ids': batch[2] if args.model_type in ['bert'] else None}
+            inputs_stu = {'input_ids': batch[0], 'attention_mask': batch[1], 'labels': batch[3],
+                      'token_type_ids': batch[2] if args.model_type in ['bert'] else None, 'is_student': True}
 
-                    # # debug 
-                    # if step == 2:
-                    #     break
+            # prepare the hidden states and logits of the teacher model
+            if args.training_phase == 'dynabertw' and teacher_model:
+                with torch.no_grad():
+                    # teacher_logit: [32, 2]
+                    # len(teacher_reps) = 13; teacher_reps[0]: [32, 128, 768]
+                    # _, teacher_logit, teacher_reps, _, _ = teacher_model(**inputs)
+                    _, teacher_logit, teacher_reps, teacher_atts, _ = teacher_model(**inputs)
+            
+            elif args.training_phase == 'dynabert' and teacher_model:
+                hidden_max_all, logits_max_all = [], []
+                atts_max_all = []
+                # for width_mult in sorted(args.width_mult_list, reverse=True):
+                for hidden_mult in sorted(args.hidden_mult_list, reverse=True):
+                    with torch.no_grad():
+                        # _, teacher_logit, teacher_reps, _, _ = teacher_model(**inputs)
+                        _, teacher_logit, teacher_reps, teacher_atts, _ = teacher_model(**inputs)
+                        hidden_max_all.append(teacher_reps)
+                        logits_max_all.append(teacher_logit)
+                        atts_max_all.append(teacher_atts)
 
-                    # current_best = 0
-                    # output_eval_file = os.path.join(args.output_dir, 'eval_results.txt')
+            # accumulate grads for all sub-networks
+            for depth_mult in sorted(args.depth_mult_list, reverse=True):
+                model.apply(lambda m: setattr(m, 'depth_mult', depth_mult))
+                # select teacher model layers for matching
+                if args.training_phase == 'dynabert' or 'final_finetuning':
+                    model = model.module if hasattr(model, 'module') else model
+                    base_model = getattr(model, model.base_model_prefix, model)
+                    n_layers = base_model.config.num_hidden_layers
+                    depth = round(depth_mult * n_layers)
+                    kept_layers_index = []
+                    for i in range(depth):
+                        kept_layers_index.append(math.floor(i / depth_mult))
+                    kept_layers_index.append(n_layers)
 
-                    # for _ in train_iterator:
-                    #     epoch_iterator = tqdm(train_dataloader, desc="Iteration")
-                    #     # epoch_iterator_1 = tqdm(train_dataloader_1, desc="Iteration")
-                    #     for step, batch in enumerate(epoch_iterator):
-                    #         print('step: ', step)
-                    #         model.train()
-                    #         batch = tuple(t.to(args.device) for t in batch)
-
-                    inputs = {'input_ids': batch[0], 'attention_mask': batch[1], 'labels': batch[3][:, 0],
-                            'token_type_ids': batch[2] if args.model_type in ['bert'] else None}
-                    inputs_stu = {'input_ids': batch[0], 'attention_mask': batch[1], 'labels': batch[3][:, 0],
-                            'token_type_ids': batch[2] if args.model_type in ['bert'] else None, 'is_student': True}
-
-                    # # prepare the hidden states and logits of the teacher model
-                    # if args.training_phase == 'dynabertw' and teacher_model:
-                    #     with torch.no_grad():
-                    #         # teacher_logit: [32, 2]
-                    #         # len(teacher_reps) = 13; teacher_reps[0]: [32, 128, 768]
-                    #         # _, teacher_logit, teacher_reps, _, _ = teacher_model(**inputs)
-                    #         _, teacher_logit, teacher_reps, teacher_atts, _ = teacher_model(**inputs)
+                # adjust width (#heads)
+                width_idx = 0
+                for width_mult in sorted(args.width_mult_list, reverse=True):
+                    model.apply(lambda m: setattr(m, 'width_mult', width_mult))
                     
-                    # prepare sub-nets
-                    subs_all = list(itertools.product(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list))
-                    subs_sampled = [subs_all[-1], subs_all[0]] + random.sample(subs_all[1:-1], 2) # four subs: largest, smallest, two randomly sampled
-                    # print('subs_sampled: ', subs_sampled)
-
-                    if args.training_phase == 'dynabert' and teacher_model:
-                        hidden_max_all, logits_max_all = [], []
-                        atts_max_all = []
-                        # for width_mult in sorted(args.width_mult_list, reverse=True):
-                        for hidden_mult in sorted(args.hidden_mult_list, reverse=True):
-                            with torch.no_grad():
-                                # teacher_logit: [32, 2]
-                                # len(teacher_reps) = 13; teacher_reps[0]: [32, 128, 768]
-                                # _, teacher_logit, teacher_reps, _, _ = teacher_model(**inputs)
-                                _, teacher_logit, teacher_reps, teacher_atts, _ = teacher_model(**inputs)
-                                hidden_max_all.append(teacher_reps)
-                                logits_max_all.append(teacher_logit)
-                                atts_max_all.append(teacher_atts)
-
-                    # accumulate grads for all sampled sub-networks
-                    for idx_sub in range(len(subs_sampled)):
-                        # print('subs_sampled[idx_sub]: ', subs_sampled[idx_sub])
-                        model.apply(lambda m: setattr(m, 'depth_mult', subs_sampled[idx_sub][0]))
-                        
-                        if args.training_phase == 'dynabert' or 'final_finetuning':
-                            model = model.module if hasattr(model, 'module') else model
-                            base_model = getattr(model, model.base_model_prefix, model)
-                            n_layers = base_model.config.num_hidden_layers
-                            depth = round(subs_sampled[idx_sub][0] * n_layers)
-                            kept_layers_index = []
-                            for i in range(depth):
-                                kept_layers_index.append(math.floor(i / subs_sampled[idx_sub][0]))
-                            kept_layers_index.append(n_layers)
-                        
-                        model.apply(lambda m: setattr(m, 'width_mult', subs_sampled[idx_sub][1]))
-                        model.apply(lambda m: setattr(m, 'hidden_mult', subs_sampled[idx_sub][2]))
+                    # adjust hidden_dim
+                    for hidden_mult in sorted(args.hidden_mult_list, reverse=True):
+                        # print('Loop: ', depth_mult, width_mult, hidden_mult)
+                        model.apply(lambda m: setattr(m, 'hidden_mult', hidden_mult))
 
                         # print('model: ', model)
+
+                        # stage 1: width-adaptive
+                        if args.training_phase == 'dynabertw':
+                            if getattr(args, 'data_aug'):
+                                # student_logit: [32, 2]
+                                # len(student_reps) = 13; student_reps[0]: embeddings, [32, 128, 768]
+                                # loss, student_logit, student_reps, _, _ = model(**inputs)
+                                loss, student_logit, student_reps, student_atts, _ = model(**inputs_stu)
+
+                                # distillation loss of logits
+                                if args.output_mode == "classification":
+                                    logit_loss = soft_cross_entropy(student_logit, teacher_logit.detach())
+                                elif args.output_mode == "regression":
+                                    logit_loss = 0
+
+                                # # distillation loss of hidden states
+                                # rep_loss = 0
+                                # for student_rep, teacher_rep in zip(student_reps, teacher_reps):
+                                #     tmp_loss = loss_mse(student_rep, teacher_rep.detach())
+                                #     rep_loss += tmp_loss
+
+                                # last layer
+                                student_rep, teacher_rep = student_reps[-1], teacher_reps[-1]
+                                rep_loss = loss_mse(student_rep, teacher_rep.detach())
+
+                                # # distillation loss of attention
+                                # att_loss = 0
+                                # # multiple layers
+                                # for student_att, teacher_att in zip(student_atts, teacher_atts):
+                                #     student_att = torch.where(student_att <= -1e2, torch.zeros_like(student_att).to(args.device),
+                                #                   student_att)
+                                #     teacher_att = torch.where(teacher_att <= -1e2, torch.zeros_like(teacher_att).to(args.device),
+                                #                   teacher_att)
+                                #     tmp_loss = loss_mse(student_att, teacher_att.detach())
+                                #     att_loss += tmp_loss
                                 
+                                # last layer
+                                # student_att: [32, width_mult*12, 128, 128]
+                                # teacher_att: [32, 12, 128, 128]
+                                student_att, teacher_att = student_atts[-1], teacher_atts[-1]
+                                student_att = torch.where(student_att <= -1e2, torch.zeros_like(student_att).to(args.device),
+                                                student_att)
+                                teacher_att = torch.where(teacher_att <= -1e2, torch.zeros_like(teacher_att).to(args.device),
+                                                teacher_att)
+                                # att_loss = loss_mse(student_att, teacher_att.detach())
+                                att_loss = loss_mse(torch.sum(student_att, dim=1), torch.sum(teacher_att.detach(), dim=1))
+
+                                # loss = args.width_lambda1 * logit_loss + args.width_lambda2 * rep_loss
+                                # loss = args.width_lambda1 * logit_loss + args.width_lambda3 * att_loss
+                                loss = args.width_lambda1 * logit_loss + args.width_lambda3 * att_loss + args.width_lambda2 * rep_loss
+                            
+                            else:
+                                # loss = model(**inputs)[0]
+
+                                # student_logit: [32, 2]
+                                # len(student_reps) = 13; student_reps[0]: [32, 128, 768]
+                                hard_loss, student_logit, student_reps, student_atts, _ = model(**inputs_stu)
+
+                                # distillation loss of logits
+                                if args.output_mode == "classification":
+                                    logit_loss = soft_cross_entropy(student_logit, teacher_logit.detach())
+                                elif args.output_mode == "regression":
+                                    logit_loss = 0
+
+                                # # distillation loss of hidden states
+                                # last layer
+                                student_rep, teacher_rep = student_reps[-1], teacher_reps[-1]
+                                rep_loss = loss_mse(student_rep, teacher_rep.detach())
+
+                                # # distillation loss of attention
+                                # last layer
+                                student_att, teacher_att = student_atts[-1], teacher_atts[-1]
+                                student_att = torch.where(student_att <= -1e2, torch.zeros_like(student_att).to(args.device),
+                                                student_att)
+                                teacher_att = torch.where(teacher_att <= -1e2, torch.zeros_like(teacher_att).to(args.device),
+                                                teacher_att)
+                                # att_loss = loss_mse(student_att, teacher_att.detach())
+                                att_loss = loss_mse(torch.sum(student_att, dim=1), torch.sum(teacher_att.detach(), dim=1))
+
+                                # loss = args.width_lambda1 * logit_loss + args.width_lambda2 * rep_loss
+                                # loss = args.width_lambda4 * hard_loss + args.width_lambda1 * logit_loss + args.width_lambda3 * att_loss
+                                loss = args.width_lambda4 * hard_loss + args.width_lambda1 * logit_loss + args.width_lambda3 * att_loss + args.width_lambda2 * rep_loss
+
+                                # if (global_step + 1) % args.printloss_step == 0:
+                                #     print("------------Global_step {}----------".format(global_step))
+                                #     print("total loss", loss.item())
+                                #     print("hard_loss", hard_loss.item())
+                                #     print("logit_loss", logit_loss.item())
+                                #     print("att_loss", att_loss.item())
+                                #     print("rep_loss", rep_loss.item())
+
                         # stage 2: width- and depth- adaptive
-                        if args.training_phase == 'dynabert':
+                        elif args.training_phase == 'dynabert':
                             if getattr(args, 'data_aug'):
                                 loss, student_logit, student_reps, student_atts, _ = model(**inputs_stu)
 
@@ -329,7 +345,7 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                                 # logit_loss could represent hard_loss ???
                                 # loss = args.depth_lambda1 * logit_loss + args.depth_lambda3 * att_loss
                                 loss = args.depth_lambda1 * logit_loss + args.depth_lambda3 * att_loss + args.depth_lambda2 * rep_loss
-                                # width_idx += 1  # move to the next width
+                                width_idx += 1  # move to the next width
 
                             else: 
                                 hard_loss, student_logit, student_reps, student_atts, _ = model(**inputs_stu)
@@ -356,8 +372,6 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                                 # att_loss = 0
                                 
                                 # last layer
-                                # student_att: [32, width_mult*12, 128, 128]
-                                # teacher_att: [32, 12, 128, 128]
                                 # student_att, teacher_att = student_atts[-1], atts_max_all[width_idx][kept_layers_index[-2]] # '-2'??? check it again
                                 student_att, teacher_att = student_atts[-1], teacher_atts[-1]
                                 student_att = torch.where(student_att <= -1e2, torch.zeros_like(student_att).to(args.device),
@@ -370,7 +384,7 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                                 # logit_loss could represent hard_loss ???
                                 # loss = args.depth_lambda4 * hard_loss + args.depth_lambda1 * logit_loss + args.depth_lambda3 * att_loss
                                 loss = args.depth_lambda4 * hard_loss + args.depth_lambda1 * logit_loss + args.depth_lambda3 * att_loss + args.depth_lambda2 * rep_loss
-                                # width_idx += 1  # move to the next width
+                                width_idx += 1  # move to the next width
 
                                 # if (global_step + 1) % args.printloss_step == 0:
                                 #     print("------------Global_step {}----------".format(global_step))
@@ -384,135 +398,81 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                         else:
                             loss = model(**inputs_stu)[0]
 
-                        if global_step % 100 == 0:
-                            print('')
-                            print('local_rank, loss: ', args.local_rank, loss)
-                            print('')
-
+                        print('loss: ', loss)
                         if args.n_gpu > 1:
                             loss = loss.mean()
                         if args.gradient_accumulation_steps > 1:
                             loss = loss / args.gradient_accumulation_steps
 
-                        # loss.backward()
-                        
-                        # added from TinyBERT (DK)
-                        if args.fp16:
-                            optimizer.backward(loss)
-                        else:
-                            loss.backward()
-                    
-                    # clip the accumulated grad from all widths
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-                    tr_loss += loss.item()
-                    nb_tr_steps += 1
-                    pbar.update(1)
+                        loss.backward()
 
-                    mean_loss = tr_loss * args.gradient_accumulation_steps / nb_tr_steps
+            # clip the accumulated grad from all widths
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            tr_loss += loss.item()
+            if (step + 1) % args.gradient_accumulation_steps == 0:
+                optimizer.step()
+                scheduler.step()  # Update learning rate schedule
+                model.zero_grad()
+                global_step += 1
 
-                    if (step + 1) % args.gradient_accumulation_steps == 0:
-                        optimizer.step()
-                        scheduler.step()  # Update learning rate schedule
-                        model.zero_grad()
-                        global_step += 1
+                # evaluate
+                if global_step > 0 and args.logging_steps > 0 and global_step % args.logging_steps == 0:
+                    print('Evaluate: global_step is ', global_step)
+                    if args.evaluate_during_training:
+                        acc = []
+                        if args.task_name == "mnli":   # for both MNLI-m and MNLI-mm
+                            acc_both = []
 
-                        # # save
-                        # if global_step > 0 and args.logging_steps > 0 and global_step % args.logging_steps == 0:
-                        #     logger.info("Saving model checkpoint to %s", args.output_dir)
-                        #     model_to_save = model.module if hasattr(model, 'module') else model
-                        #     model_to_save.save_pretrained(args.output_dir)
-                        #     torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))
-                        #     model_to_save.config.to_json_file(os.path.join(args.output_dir, CONFIG_NAME))
-                        #     tokenizer.save_vocabulary(args.output_dir)
+                        # collect performance of all sub-networks
+                        for depth_mult in sorted(args.depth_mult_list, reverse=True):
+                            model.apply(lambda m: setattr(m, 'depth_mult', depth_mult))
+                            for width_mult in sorted(args.width_mult_list, reverse=True):
+                                model.apply(lambda m: setattr(m, 'width_mult', width_mult))
+                                for hidden_mult in sorted(args.hidden_mult_list, reverse=True):
+                                    model.apply(lambda m: setattr(m, 'hidden_mult', hidden_mult))
 
+                                    results = evaluate(args, model, tokenizer)
+                                    # print("results: ", results)
 
-                        # # evaluate
-                        # if global_step > 0 and args.logging_steps > 0 and global_step % args.logging_steps == 0:
-                        #     print('Evaluate: global_step is ', global_step)
-                        #     if args.evaluate_during_training:
-                        #         acc = []
-                        #         if args.task_name == "mnli":   # for both MNLI-m and MNLI-mm
-                        #             acc_both = []
+                                    logger.info("********** start evaluate results *********")
+                                    logger.info("depth_mult: %s ", depth_mult)
+                                    logger.info("width_mult: %s ", width_mult)
+                                    logger.info("hidden_mult: %s ", hidden_mult)
+                                    logger.info("results: %s ", results)
+                                    logger.info("********** end evaluate results *********")
 
-                        #         # collect performance of all sub-networks
-                        #         for depth_mult in sorted(args.depth_mult_list, reverse=True):
-                        #             model.apply(lambda m: setattr(m, 'depth_mult', depth_mult))
-                        #             for width_mult in sorted(args.width_mult_list, reverse=True):
-                        #                 model.apply(lambda m: setattr(m, 'width_mult', width_mult))
-                        #                 for hidden_mult in sorted(args.hidden_mult_list, reverse=True):
-                        #                     model.apply(lambda m: setattr(m, 'hidden_mult', hidden_mult))
+                                    acc.append(list(results.values())[0])
+                                    if args.task_name == "mnli":
+                                        acc_both.append(list(results.values())[0:2])
 
-                        #                     results = evaluate(args, model, tokenizer)
-                        #                     # print("results: ", results)
+                        # save model
+                        if sum(acc) > current_best:
+                            current_best = sum(acc)
+                            if args.task_name == "mnli":
+                                print("***best***{}\n".format(acc_both))
+                                with open(output_eval_file, "a") as writer:
+                                    writer.write("{}\n".format(acc_both))
+                            else:
+                                print("***best***{}\n".format(acc))
+                                with open(output_eval_file, "a") as writer:
+                                    writer.write("{}\n" .format(acc))
 
-                        #                     logger.info("********** start evaluate results *********")
-                        #                     logger.info("depth_mult: %s ", depth_mult)
-                        #                     logger.info("width_mult: %s ", width_mult)
-                        #                     logger.info("hidden_mult: %s ", hidden_mult)
-                        #                     logger.info("results: %s ", results)
-                        #                     logger.info("********** end evaluate results *********")
+                            logger.info("Saving model checkpoint to %s", args.output_dir)
+                            model_to_save = model.module if hasattr(model, 'module') else model
+                            model_to_save.save_pretrained(args.output_dir)
+                            torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))
+                            model_to_save.config.to_json_file(os.path.join(args.output_dir, CONFIG_NAME))
+                            tokenizer.save_vocabulary(args.output_dir)
 
-                        #                     acc.append(list(results.values())[0])
-                        #                     if args.task_name == "mnli":
-                        #                         acc_both.append(list(results.values())[0:2])
+            if 0 < t_total < global_step:
+                epoch_iterator.close()
+                break
 
-                                # # save model
-                                # if sum(acc) > current_best:
-                                #     current_best = sum(acc)
-                                #     if args.task_name == "mnli":
-                                #         print("***best***{}\n".format(acc_both))
-                                #         with open(output_eval_file, "a") as writer:
-                                #             writer.write("{}\n".format(acc_both))
-                                #     else:
-                                #         print("***best***{}\n".format(acc))
-                                #         with open(output_eval_file, "a") as writer:
-                                #             writer.write("{}\n" .format(acc))
+        if 0 < t_total < global_step:
+            train_iterator.close()
+            break
 
-                                #     logger.info("Saving model checkpoint to %s", args.output_dir)
-                                #     model_to_save = model.module if hasattr(model, 'module') else model
-                                #     model_to_save.save_pretrained(args.output_dir)
-                                #     torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))
-                                #     model_to_save.config.to_json_file(os.path.join(args.output_dir, CONFIG_NAME))
-                                #     tokenizer.save_vocabulary(args.output_dir)
-            
-        # save after each epoch of whole data
-        
-        # logger.info("Saving model checkpoint to %s", args.output_dir)
-        # model_to_save = model.module if hasattr(model, 'module') else model
-        # model_to_save.save_pretrained(args.output_dir)
-        # torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))
-        # model_to_save.config.to_json_file(os.path.join(args.output_dir, CONFIG_NAME))
-        # tokenizer.save_vocabulary(args.output_dir)
-
-        # model_name = "epoch_{}_{}".format(epoch_wholeset, WEIGHTS_NAME)
-        # logging.info("** ** * Saving fine-tuned model ** ** * ")
-        # model_to_save = model.module if hasattr(model, 'module') else model
-        # output_model_file = os.path.join(args.output_dir, model_name)
-        # output_config_file = os.path.join(args.output_dir, CONFIG_NAME)
-        # torch.save(model_to_save.state_dict(), output_model_file)
-        # model_to_save.config.to_json_file(output_config_file)
-        # tokenizer.save_vocabulary(args.output_dir)
-        # torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))
-
-        if args.local_rank % torch.cuda.device_count() == 0:
-
-            print("Saving model checkpoint via GPU =", args.local_rank)
-
-            if not os.path.exists(os.path.join(args.output_dir, "epoch_{}/".format(epoch_wholeset))):
-                os.makedirs(os.path.join(args.output_dir, "epoch_{}/".format(epoch_wholeset)))
-
-            model_name = "epoch_{}/{}".format(epoch_wholeset, WEIGHTS_NAME)
-            config_name = "epoch_{}/{}".format(epoch_wholeset, CONFIG_NAME)
-
-            logging.info("** ** * Saving fine-tuned model ** ** * ")
-            model_to_save = model.module if hasattr(model, 'module') else model
-            output_model_file = os.path.join(args.output_dir, model_name)
-            output_config_file = os.path.join(args.output_dir, config_name)
-            torch.save(model_to_save.state_dict(), output_model_file)
-            model_to_save.config.to_json_file(output_config_file)
-
-            tokenizer.save_vocabulary(os.path.join(args.output_dir, "epoch_{}/".format(epoch_wholeset)))
-            torch.save(args, os.path.join(args.output_dir, "epoch_{}/".format(epoch_wholeset), 'training_args.bin'))
+    return global_step, tr_loss / global_step
 
 
 def evaluate(args, model, tokenizer, prefix=""):
@@ -698,133 +658,6 @@ def reorder_neuron_head(model, head_importance, neuron_importance):
         base_model.encoder.layer[layer].intermediate.reorder_neurons(idx)
         base_model.encoder.layer[layer].output.reorder_neurons(idx)
 
-InputFeatures = namedtuple("InputFeatures", "input_ids input_mask segment_ids lm_label_ids is_next")
-
-def convert_example_to_features(example, tokenizer, max_seq_length):
-    tokens = example["tokens"]
-    segment_ids = example["segment_ids"]
-    is_random_next = example["is_random_next"]
-    masked_lm_positions = example["masked_lm_positions"]
-    masked_lm_labels = example["masked_lm_labels"]
-
-    if len(tokens) > max_seq_length:
-        logger.info('len(tokens): {}'.format(len(tokens)))
-        logger.info('tokens: {}'.format(tokens))
-        tokens = tokens[:max_seq_length]
-
-    if len(tokens) != len(segment_ids):
-        logger.info('tokens: {}\nsegment_ids: {}'.format(tokens, segment_ids))
-        segment_ids = [0] * len(tokens)
-
-    assert len(tokens) == len(segment_ids) <= max_seq_length  # The preprocessed data should be already truncated
-    input_ids = tokenizer.convert_tokens_to_ids(tokens)
-    masked_label_ids = tokenizer.convert_tokens_to_ids(masked_lm_labels)
-
-    input_array = np.zeros(max_seq_length, dtype=np.int)
-    input_array[:len(input_ids)] = input_ids
-
-    mask_array = np.zeros(max_seq_length, dtype=np.bool)
-    mask_array[:len(input_ids)] = 1
-
-    segment_array = np.zeros(max_seq_length, dtype=np.bool)
-    segment_array[:len(segment_ids)] = segment_ids
-
-    lm_label_array = np.full(max_seq_length, dtype=np.int, fill_value=-1)
-    # lm_label_array = np.full(max_seq_length, dtype=np.int, fill_value=0)
-    lm_label_array[masked_lm_positions] = masked_label_ids
-
-    features = InputFeatures(input_ids=input_array,
-                             input_mask=mask_array,
-                             segment_ids=segment_array,
-                             lm_label_ids=lm_label_array,
-                             is_next=is_random_next)
-    return features
-
-
-class PregeneratedDataset(Dataset):
-    def __init__(self, training_path, epoch, tokenizer, num_data_epochs, reduce_memory=False, output_cache_dir=None, local_rank=None):
-        self.vocab = tokenizer.vocab
-        self.tokenizer = tokenizer
-        self.epoch = epoch
-        self.data_epoch = int(epoch % num_data_epochs)
-        logger.info('training_path: {}'.format(training_path))
-        data_file = training_path / "epoch_{}.json".format(self.data_epoch)
-        metrics_file = training_path / "epoch_{}_metrics.json".format(self.data_epoch)
-
-        logger.info('data_file: {}'.format(data_file))
-        logger.info('metrics_file: {}'.format(metrics_file))
-
-        assert data_file.is_file() and metrics_file.is_file()
-        metrics = json.loads(metrics_file.read_text())
-        num_samples = metrics['num_training_examples']
-        seq_len = metrics['max_seq_len']
-        self.temp_dir = None
-        self.working_dir = None
-        if reduce_memory:
-            self.temp_dir = TemporaryDirectory()
-            # self.working_dir = Path('/cache')
-            # self.working_dir = Path('/home/jiachao/data/DongkuanXu/TinyBERT/General_KD/cache')
-            self.working_dir = Path(output_cache_dir)
-            input_ids = np.memmap(filename=self.working_dir/'input_ids.memmap',
-                                  mode='w+', dtype=np.int32, shape=(num_samples, seq_len))
-            input_masks = np.memmap(filename=self.working_dir/'input_masks.memmap',
-                                    shape=(num_samples, seq_len), mode='w+', dtype=np.bool)
-            segment_ids = np.memmap(filename=self.working_dir/'segment_ids.memmap',
-                                    shape=(num_samples, seq_len), mode='w+', dtype=np.bool)
-            lm_label_ids = np.memmap(filename=self.working_dir/'lm_label_ids.memmap',
-                                     shape=(num_samples, seq_len), mode='w+', dtype=np.int32)
-            lm_label_ids[:] = -1
-            is_nexts = np.memmap(filename=self.working_dir/'is_nexts.memmap',
-                                 shape=(num_samples,), mode='w+', dtype=np.bool)
-        else:
-            input_ids = np.zeros(shape=(num_samples, seq_len), dtype=np.int32)
-            input_masks = np.zeros(shape=(num_samples, seq_len), dtype=np.bool)
-            segment_ids = np.zeros(shape=(num_samples, seq_len), dtype=np.bool)
-            lm_label_ids = np.full(shape=(num_samples, seq_len), dtype=np.int32, fill_value=-1)
-            is_nexts = np.zeros(shape=(num_samples,), dtype=np.bool)
-
-        logging.info("Loading training examples for epoch {}".format(epoch))
-
-        with data_file.open() as f:
-            for i, line in enumerate(tqdm(f, total=num_samples, desc="Training examples")):
-                
-                # if i == 5000:
-                #     break
-                if i % 100000 == 0:
-                    print("")
-                    print("local_rank, line i: ", local_rank, i)
-                    print("")
-
-                line = line.strip()
-                example = json.loads(line)
-                features = convert_example_to_features(example, tokenizer, seq_len)
-                input_ids[i] = features.input_ids
-                segment_ids[i] = features.segment_ids
-                input_masks[i] = features.input_mask
-                lm_label_ids[i] = features.lm_label_ids
-                is_nexts[i] = features.is_next
-
-        # assert i == num_samples - 1  # Assert that the sample count metric was true
-        logging.info("Loading complete!")
-        self.num_samples = num_samples
-        self.seq_len = seq_len
-        self.input_ids = input_ids
-        self.input_masks = input_masks
-        self.segment_ids = segment_ids
-        # self.lm_label_ids = lm_label_ids
-        self.lm_label_ids = lm_label_ids * 0
-        self.is_nexts = is_nexts
-
-    def __len__(self):
-        return self.num_samples
-
-    def __getitem__(self, item):
-        return (torch.tensor(self.input_ids[item].astype(np.int64)),
-                torch.tensor(self.input_masks[item].astype(np.int64)),
-                torch.tensor(self.segment_ids[item].astype(np.int64)),
-                torch.tensor(self.lm_label_ids[item].astype(np.int64)),
-                torch.tensor(int(self.is_nexts[item])))
-
 
 def main():
     parser = argparse.ArgumentParser()
@@ -862,7 +695,7 @@ def main():
                         help="Total number of training epochs to perform.")
     parser.add_argument("--warmup_steps", default=0, type=int,
                         help="Linear warmup over warmup_steps.")
-    parser.add_argument('--logging_steps', type=int, default=1000,
+    parser.add_argument('--logging_steps', type=int, default=50,
                         help="Log every X updates steps.")
     parser.add_argument('--seed', type=int, default=42,
                         help="random seed for initialization")
@@ -905,83 +738,17 @@ def main():
     parser.add_argument('--hidden_mult_list', type=str, default='1.',
                         help="the possible depths used for training, e.g., '1.' is for default")
 
-    parser.add_argument("--pregenerated_data",
-                        type=Path,
-                        required=True)
-    parser.add_argument("--reduce_memory",
-                        action="store_true",
-                        help="Store training data as on-disc memmaps to massively reduce memory usage")
-    parser.add_argument("--output_cache_dir", default=None, type=str, required=True,
-                        help="The output directory")
-    parser.add_argument("--local_rank",
-                        type=int,
-                        default=-1,
-                        help="local_rank for distributed training on gpus")
-
-    parser.add_argument('--fp16',
-                        action='store_true',
-                        help="Whether to use 16-bit float precision instead of 32-bit")
-    parser.add_argument("--no_cuda",
-                        action='store_true',
-                        help="Whether not to use CUDA when available")
-    parser.add_argument("--num_train_epochs_wholeset", default=3.0, type=float,
-                        help="Total number of training epochs to perform.")
-
-
     args = parser.parse_args()
 
     args.width_mult_list = [float(width) for width in args.width_mult_list.split(',')]
     args.depth_mult_list = [float(depth) for depth in args.depth_mult_list.split(',')]
     args.hidden_mult_list = [float(hidden) for hidden in args.hidden_mult_list.split(',')]
 
-    # added from TinyBERT (DK)
-    samples_per_epoch = []
-    for i in range(int(args.num_train_epochs)):
-        epoch_file = args.pregenerated_data / "epoch_{}.json".format(i)
-        metrics_file = args.pregenerated_data / "epoch_{}_metrics.json".format(i)
-        if epoch_file.is_file() and metrics_file.is_file():
-            metrics = json.loads(metrics_file.read_text())
-            samples_per_epoch.append(metrics['num_training_examples'])
-        else:
-            if i == 0:
-                exit("No training data was found!")
-            print("Warning! There are fewer epochs of pregenerated data ({}) than training epochs ({}).".format(i, args.num_train_epochs))
-            print("This script will loop over the available data, but training diversity may be negatively impacted.")
-            num_data_epochs = i
-            break
-    # ??? (DK)
-    else:
-        num_data_epochs = args.num_train_epochs # num_data_epochs should be 3 and it is used for processing each subset of wiki
-
-    print('args.local_rank: ', args.local_rank)
-
     # Setup CUDA, GPU & distributed training
-    # device = torch.device("cuda" if torch.cuda.is_available()  else "cpu")
-    # args.n_gpu = torch.cuda.device_count()
-    # print('n_gpu: ', args.n_gpu)
-    # args.device = device
-
-    # added from TinyBERT (DK)
-    if args.local_rank == -1 or args.no_cuda:
-        device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
-        n_gpu = torch.cuda.device_count()
-    else:
-        torch.cuda.set_device(args.local_rank)
-        device = torch.device("cuda", args.local_rank)
-        n_gpu = 1
-        # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
-        torch.distributed.init_process_group(backend='nccl')
-
-    # logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
-    #                     datefmt='%m/%d/%Y %H:%M:%S',
-    #                     level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
-
-    logger.info("device: {} n_gpu: {}, distributed training: {}, 16-bits training: {}".format(
-        device, n_gpu, bool(args.local_rank != -1), args.fp16))
-
-    args.n_gpu = n_gpu
+    device = torch.device("cuda" if torch.cuda.is_available()  else "cpu")
+    args.n_gpu = torch.cuda.device_count()
+    print('n_gpu: ', args.n_gpu)
     args.device = device
-
 
     # Set seed
     set_seed(args)
@@ -1017,21 +784,20 @@ def main():
 
     # load student model if necessary
     model = model_class.from_pretrained(args.model_dir, config=config)
+    # print('model: ', model)
+    s = model.state_dict()
+    s = {k:v for k,v in s.items() if not k.startswith('classifier')}
+    config.num_labels = len(label_list)
+    model = model_class.from_pretrained(None, config=config, state_dict=s)
+    # print('model: ', model)
 
-    # # print('model: ', model)
-    # s = model.state_dict()
-    # s = {k:v for k,v in s.items() if not k.startswith('classifier')}
-    # config.num_labels = len(label_list)
-    # model = model_class.from_pretrained(None, config=config, state_dict=s)
-    # # print('model: ', model)
-
-    # # if args.training_phase == 'dynabertw':
-    # if args.training_phase == 'dynabertw' or args.training_phase == 'dynabert':
-    #     print('Network rewiring starts')
-    #     # rewire the network according to the importance of attention heads and neurons
-    #     head_importance, neuron_importance = compute_neuron_head_importance(args, model, tokenizer)
-    #     reorder_neuron_head(model, head_importance, neuron_importance)
-    #     print('Network rewiring done!')
+    # if args.training_phase == 'dynabertw':
+    if args.training_phase == 'dynabertw' or args.training_phase == 'dynabert':
+        print('Network rewiring starts')
+        # rewire the network according to the importance of attention heads and neurons
+        head_importance, neuron_importance = compute_neuron_head_importance(args, model, tokenizer)
+        reorder_neuron_head(model, head_importance, neuron_importance)
+        print('Network rewiring done!')
 
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
@@ -1042,19 +808,18 @@ def main():
 
     # Training
     if args.do_train:
-        # print('')
-        # print('Constructing train_dataset starts')
-        # train_dataset = load_and_cache_examples(args, args.task_name, tokenizer, evaluate=False)
-        # print('Constructing train_dataset done!')
-        # print('')
+        print('')
+        print('Constructing train_dataset starts')
+        train_dataset = load_and_cache_examples(args, args.task_name, tokenizer, evaluate=False)
+        print('Constructing train_dataset done!')
+        print('')
         
         if teacher_model:
-            # global_step, tr_loss = train(args, train_dataset, model, tokenizer, teacher_model, samples_per_epoch, num_data_epochs)
-            train(args, model, tokenizer, teacher_model, samples_per_epoch, num_data_epochs)
+            global_step, tr_loss = train(args, train_dataset, model, tokenizer, teacher_model)
         else:
-            train(args, model, tokenizer, samples_per_epoch, num_data_epochs)
+            global_step, tr_loss = train(args, train_dataset, model, tokenizer)
 
-        # logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
+        logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
 
 
 if __name__ == "__main__":
@@ -1093,25 +858,26 @@ if __name__ == "__main__":
     #     '--task_name', 'MRPC',
     #     '--do_train',
     #     '--data_dir', '/home/t-dongkuanxu/Pretrained-Language-Model/Data_and_Models/Data_GLUE/glue_data/MRPC/',
-    #     '--model_dir', '/home/t-dongkuanxu/Pretrained-Language-Model/Data_and_Models/Local_models/pretrained_BERTs/BERT_base_uncased/',
+    #     '--model_dir', '/home/t-dongkuanxu/Pretrained-Language-Model/Data_and_Models/Local_models/finetuned_BERTs/bert_base_uncased_MRPC/',
     #     '--output_dir', '/home/t-dongkuanxu/Pretrained-Language-Model/DynaBERT/output_debug/',
     #     '--max_seq_length', '128',
     #     '--learning_rate', '2e-5',
     #     '--per_gpu_train_batch_size', '32',
-    #     '--num_train_epochs', '3',
-    #     '--depth_mult_list', '0.25,0.33333,0.5',
-    #     '--width_mult_list', '0.5,0.66667,1.0',
+    #     '--num_train_epochs', '1',
+    #     '--width_mult_list', '1.0',
+    #     '--depth_mult_list', '1.0',
     #     '--hidden_mult_list', '0.25,0.5,0.75,1.0',
+    #     '--width_lambda1', '1.0',
+    #     '--width_lambda2', '1.0',
+    #     '--width_lambda3', '0.001',
+    #     '--width_lambda4', '1.0',
     #     '--depth_lambda1', '1.0',
     #     '--depth_lambda2', '1.0',
     #     '--depth_lambda3', '0.001',
-    #     '--depth_lambda4', '0.0',
-    #     '--training_phase', 'dynabert',
+    #     '--depth_lambda4', '1.0',
+    #     '--training_phase', 'dynabertw',
     #     '--logging_steps', '20',
     #     '--printloss_step', '10',
-    #     '--weight_decay', '0.01',
-    #     '--output_cache_dir', '/home/t-dongkuanxu/Pretrained-Language-Model/Data_and_Models/Outputs/General_KD/cache/',
-    #     '--pregenerated_data', '/home/t-dongkuanxu/Pretrained-Language-Model/Data_and_Models/English_Wiki/corpus_jsonfile_for_general_KD/',
     #     ])
 
     main()
