@@ -500,8 +500,9 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
         # torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))
 
         if args.local_rank % torch.cuda.device_count() == 0:
-
-            print("Saving model checkpoint via GPU (local_rank) =", args.local_rank)
+            print('')
+            print("Saving model checkpoint via GPU (local_rank) = {}".format(args.local_rank))
+            print('')
 
             if not os.path.exists(os.path.join(args.output_dir, "epoch_{}/".format(epoch_wholeset))):
                 os.makedirs(os.path.join(args.output_dir, "epoch_{}/".format(epoch_wholeset)))
