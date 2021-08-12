@@ -252,7 +252,8 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                     #         _, teacher_logit, teacher_reps, teacher_atts, _ = teacher_model(**inputs)
                     
                     # prepare sub-nets
-                    subs_all = list(itertools.product(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list))
+                    # subs_all = list(itertools.product(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list))
+                    subs_all = list(itertools.product(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list, args.intermediate_mult_list))
                     subs_sampled = [subs_all[-1], subs_all[0]] + random.sample(subs_all[1:-1], 2) # four subs: largest, smallest, two randomly sampled
                     # print('subs_sampled: ', subs_sampled)
 
@@ -287,6 +288,7 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                         
                         model.apply(lambda m: setattr(m, 'width_mult', subs_sampled[idx_sub][1]))
                         model.apply(lambda m: setattr(m, 'hidden_mult', subs_sampled[idx_sub][2]))
+                        model.apply(lambda m: setattr(m, 'intermediate_mult', subs_sampled[idx_sub][3]))
 
                         # print('model: ', model)
                                 
@@ -935,12 +937,16 @@ def main():
     parser.add_argument("--num_train_epochs_wholeset", default=3.0, type=float,
                         help="Total number of training epochs to perform.")
 
+    # for hidden_dim direction
+    parser.add_argument('--intermediate_mult_list', type=str, default='1.',
+                        help="the possible intermediate size used for training, e.g., '1.' is for default")
 
     args = parser.parse_args()
 
     args.width_mult_list = [float(width) for width in args.width_mult_list.split(',')]
     args.depth_mult_list = [float(depth) for depth in args.depth_mult_list.split(',')]
     args.hidden_mult_list = [float(hidden) for hidden in args.hidden_mult_list.split(',')]
+    args.intermediate_mult_list = [float(intermediate) for intermediate in args.intermediate_mult_list.split(',')]
 
     # added from TinyBERT (DK)
     samples_per_epoch = []

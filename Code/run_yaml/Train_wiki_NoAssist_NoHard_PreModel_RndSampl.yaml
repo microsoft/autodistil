@@ -65,6 +65,7 @@ search:
         --hidden_mult_list {Hidden_Mult_List}
         --depth_mult_list {Depth_Mult_List}
         --width_mult_list {Width_Mult_List}
+        --intermediate_mult_list {Intermediate_Mult_List}
         --depth_lambda1 {Depth_Lambda1}
         --depth_lambda2 {Depth_Lambda2}
         --depth_lambda3 {Depth_Lambda3}
@@ -101,6 +102,9 @@ search:
     - name: Width_Mult_List
       spec: discrete
       values: ['0.08333,0.16667,0.25,0.33333,0.41667,0.5,0.58333,0.66667,0.75,0.83333,0.91667,1.0'] # head_numbers: [1/12, 2/12, ..., 12/12] * 12
+    - name: Intermediate_Mult_List
+      spec: discrete
+      values: ['1.0,1.25,1.5,1.75,2.0,2.25,2.5,2.75,3.0,3.25,3.5,3.75,4.0'] # intermediate_size: *13
     - name: Depth_Lambda1
       spec: discrete
       values: [1.0]

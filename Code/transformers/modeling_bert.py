@@ -181,6 +181,8 @@ class DynaLinear_v1(nn.Linear):
         self.dyna_cate = dyna_cate
         self.hidden_mult = 1.
 
+        self.intermediate_mult = 1.
+
     def forward(self, input):
         if self.dyna_dim[0]:
             # self.in_features = round_to_nearest(self.in_features_max, self.width_mult, self.num_heads)
@@ -188,6 +190,8 @@ class DynaLinear_v1(nn.Linear):
                 self.in_features = round_to_nearest(self.in_features_max, self.width_mult, self.num_heads)
             if self.dyna_cate[0] == 'hid':
                 self.in_features = int(self.in_features_max * self.hidden_mult)
+            if self.dyna_cate[0] == 'inter':
+                self.in_features = int(self.in_features_max * self.hidden_mult * self.intermediate_mult * 0.25) # because originally intermediate = 4 * hidden 
 
         if self.dyna_dim[1]:
             # self.out_features = round_to_nearest(self.out_features_max, self.width_mult, self.num_heads)
@@ -195,6 +199,8 @@ class DynaLinear_v1(nn.Linear):
                 self.out_features = round_to_nearest(self.out_features_max, self.width_mult, self.num_heads)
             if self.dyna_cate[1] == 'hid':
                 self.out_features = int(self.out_features_max * self.hidden_mult)
+            if self.dyna_cate[1] == 'inter':
+                self.out_features = int(self.out_features_max * self.hidden_mult * self.intermediate_mult * 0.25)
 
         weight = self.weight[:self.out_features, :self.in_features]
         if self.bias is not None:
@@ -611,7 +617,8 @@ class BertIntermediate_v1(nn.Module):
         super(BertIntermediate_v1, self).__init__()
         # dense layer for adaptive width
         # self.dense = DynaLinear(config.hidden_size, config.intermediate_size, config.num_attention_heads, dyna_dim=[False, True])
-        self.dense = DynaLinear_v1(config.hidden_size, config.intermediate_size, config.num_attention_heads, dyna_dim=[True, True], dyna_cate=['hid', 'hid'])
+        # self.dense = DynaLinear_v1(config.hidden_size, config.intermediate_size, config.num_attention_heads, dyna_dim=[True, True], dyna_cate=['hid', 'hid'])
+        self.dense = DynaLinear_v1(config.hidden_size, config.intermediate_size, config.num_attention_heads, dyna_dim=[True, True], dyna_cate=['hid', 'inter'])
         
         if isinstance(config.hidden_act, str) or (sys.version_info[0] == 2 and isinstance(config.hidden_act, unicode)):
             self.intermediate_act_fn = ACT2FN[config.hidden_act]
@@ -677,7 +684,8 @@ class BertOutput_v1(nn.Module):
         super(BertOutput_v1, self).__init__()
         # dense layer for adaptive width
         # self.dense = DynaLinear(config.intermediate_size, config.hidden_size, config.num_attention_heads, dyna_dim=[True, False])
-        self.dense = DynaLinear_v1(config.intermediate_size, config.hidden_size, config.num_attention_heads, dyna_dim=[True, True], dyna_cate=['hid', 'hid'])
+        # self.dense = DynaLinear_v1(config.intermediate_size, config.hidden_size, config.num_attention_heads, dyna_dim=[True, True], dyna_cate=['hid', 'hid'])
+        self.dense = DynaLinear_v1(config.intermediate_size, config.hidden_size, config.num_attention_heads, dyna_dim=[True, True], dyna_cate=['inter', 'hid'])
 
         # self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.LayerNorm = DynaBertLayerNorm_v1(config.hidden_size, eps=config.layer_norm_eps, dyna_dim=[True], dyna_cate=['hid'])
