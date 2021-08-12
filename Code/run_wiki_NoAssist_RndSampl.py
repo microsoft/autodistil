@@ -193,15 +193,17 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
 
     global_step = 0
     model.zero_grad()
-    train_iterator = trange(int(args.num_train_epochs), desc="Epoch")
+    # train_iterator = trange(int(args.num_train_epochs), desc="Epoch")
     set_seed(args)
 
     # loop over whole set (three epoch-data)
-    for epoch_wholeset in trange(int(args.num_train_epochs_wholeset), desc="Epoch"):
+    # for epoch_wholeset in trange(int(args.num_train_epochs_wholeset), desc="Epoch_wholeset"):
+    for epoch_wholeset in trange(int(args.num_train_epochs_wholeset), desc="Local_rank {}, Epoch_wholeset".format(args.local_rank)):
         # loop over each epoch-data
-        for epoch in trange(int(args.num_train_epochs), desc="Epoch"):
+        # for epoch in trange(int(args.num_train_epochs), desc="Epoch"):
+        for epoch in trange(int(args.num_train_epochs), desc="Local_rank {}, Epoch".format(args.local_rank)):
             epoch_dataset = PregeneratedDataset(epoch=epoch, training_path=args.pregenerated_data, tokenizer=tokenizer,
-                                                num_data_epochs=num_data_epochs, reduce_memory=args.reduce_memory, output_cache_dir=args.output_cache_dir, local_rank=args.local_rank)
+                                                num_data_epochs=num_data_epochs, reduce_memory=args.reduce_memory, output_cache_dir=args.output_cache_dir, args=args)
             if args.local_rank == -1:
                 train_sampler = RandomSampler(epoch_dataset)
             else:
@@ -215,8 +217,10 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
             # rep_loss   = 0.0
             model.train()
             nb_tr_examples, nb_tr_steps = 0, 0
-            with tqdm(total=len(train_dataloader), desc="Epoch {}".format(epoch)) as pbar:
-                for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration", ascii=True)):
+            # with tqdm(total=len(train_dataloader), desc="Epoch {}".format(epoch)) as pbar:
+            with tqdm(total=len(train_dataloader), desc="Local_rank {}, Epoch {}".format(args.local_rank, epoch)) as pbar:
+                # for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration", ascii=True)):
+                for step, batch in enumerate(tqdm(train_dataloader, desc="Local_rank {}, Iteration".format(args.local_rank), ascii=True)):
                     batch = tuple(t.to(args.device) for t in batch)
 
                     # # debug 
@@ -386,7 +390,8 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
 
                         if global_step % 100 == 0:
                             print('')
-                            print('local_rank, loss: ', args.local_rank, loss)
+                            # print('local_rank, loss: ', args.local_rank, loss)
+                            print("Local_rank {}, Loss {}".format(args.local_rank, loss))
                             print('')
 
                         if args.n_gpu > 1:
@@ -496,7 +501,7 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
 
         if args.local_rank % torch.cuda.device_count() == 0:
 
-            print("Saving model checkpoint via GPU =", args.local_rank)
+            print("Saving model checkpoint via GPU (local_rank) =", args.local_rank)
 
             if not os.path.exists(os.path.join(args.output_dir, "epoch_{}/".format(epoch_wholeset))):
                 os.makedirs(os.path.join(args.output_dir, "epoch_{}/".format(epoch_wholeset)))
@@ -742,7 +747,7 @@ def convert_example_to_features(example, tokenizer, max_seq_length):
 
 
 class PregeneratedDataset(Dataset):
-    def __init__(self, training_path, epoch, tokenizer, num_data_epochs, reduce_memory=False, output_cache_dir=None, local_rank=None):
+    def __init__(self, training_path, epoch, tokenizer, num_data_epochs, reduce_memory=False, output_cache_dir=None, args=None):
         self.vocab = tokenizer.vocab
         self.tokenizer = tokenizer
         self.epoch = epoch
@@ -786,13 +791,15 @@ class PregeneratedDataset(Dataset):
         logging.info("Loading training examples for epoch {}".format(epoch))
 
         with data_file.open() as f:
-            for i, line in enumerate(tqdm(f, total=num_samples, desc="Training examples")):
+            # for i, line in enumerate(tqdm(f, total=num_samples, desc="Training examples")):
+            for i, line in enumerate(tqdm(f, total=num_samples, desc="Local_rank {}, Training examples".format(args.local_rank))):
                 
-                # if i == 5000:
+                # if i == 1000:
                 #     break
                 if i % 100000 == 0:
                     print("")
-                    print("local_rank, line i: ", local_rank, i)
+                    # print("local_rank, line i: ", args.local_rank, i)
+                    print("Local_rank {}, line {}".format(args.local_rank, i))
                     print("")
 
                 line = line.strip()
