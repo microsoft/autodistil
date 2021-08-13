@@ -224,7 +224,7 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                     batch = tuple(t.to(args.device) for t in batch)
 
                     # # debug 
-                    # if step == 2:
+                    # if step == 10:
                     #     break
 
                     # current_best = 0
@@ -254,8 +254,13 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                     # prepare sub-nets
                     # subs_all = list(itertools.product(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list))
                     subs_all = list(itertools.product(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list, args.intermediate_mult_list))
+                    # random.seed(int(global_step * torch.distributed.get_world_size())) ???
+                    random.seed(int(global_step))                  
                     subs_sampled = [subs_all[-1], subs_all[0]] + random.sample(subs_all[1:-1], 2) # four subs: largest, smallest, two randomly sampled
                     # print('subs_sampled: ', subs_sampled)
+                    # print('')
+                    # print("Epoch_W {}, Epoch {}, Step {}, Local_rank {}, subs_sampled {}".format(epoch_wholeset, epoch, step, args.local_rank, subs_sampled))
+                    # print('')
 
                     if args.training_phase == 'dynabert' and teacher_model:
                         hidden_max_all, logits_max_all = [], []
@@ -393,7 +398,8 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                         if global_step % 100 == 0:
                             print('')
                             # print('local_rank, loss: ', args.local_rank, loss)
-                            print("Local_rank {}, Loss {}".format(args.local_rank, loss))
+                            # print("Local_rank {}, Loss {}".format(args.local_rank, loss))
+                            print("Epoch_W {}, Epoch {}, Step {}, Local_rank {}, Sub {}, Loss {}".format(epoch_wholeset, epoch, step, args.local_rank, idx_sub, loss))
                             print('')
 
                         if args.n_gpu > 1:
@@ -797,7 +803,7 @@ class PregeneratedDataset(Dataset):
             # for i, line in enumerate(tqdm(f, total=num_samples, desc="Training examples")):
             for i, line in enumerate(tqdm(f, total=num_samples, desc="Local_rank {}, Training examples".format(args.local_rank))):
                 
-                # if i == 1000:
+                # if i == 10000:
                 #     break
                 if i % 100000 == 0:
                     print("")
