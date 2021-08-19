@@ -49,6 +49,7 @@ from transformers import glue_convert_examples_to_features as convert_examples_t
 
 import sys
 import json
+import copy
 
 logger = logging.getLogger(__name__)
 CONFIG_NAME = "config.json"
@@ -224,7 +225,7 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                     batch = tuple(t.to(args.device) for t in batch)
 
                     # # debug 
-                    # if step == 10:
+                    # if step == 1000:
                     #     break
 
                     # current_best = 0
@@ -243,9 +244,9 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                     inputs_stu = {'input_ids': batch[0], 'attention_mask': batch[1], 'labels': batch[3][:, 0],
                             'token_type_ids': batch[2] if args.model_type in ['bert'] else None, 'is_student': True}
 
-                    print('')
-                    print("Epoch_W {}, Epoch {}, Step {}, Local_rank {}, Labels {}".format(epoch_wholeset, epoch, step, args.local_rank, batch[0][0]))
-                    print('')
+                    # print('')
+                    # print("Epoch_W {}, Epoch {}, Step {}, Local_rank {}, Labels {}".format(epoch_wholeset, epoch, step, args.local_rank, batch[0][0]))
+                    # print('')
 
                     # # prepare the hidden states and logits of the teacher model
                     # if args.training_phase == 'dynabertw' and teacher_model:
@@ -403,12 +404,12 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                         else:
                             loss = model(**inputs_stu)[0]
 
-                        if global_step % 100 == 0:
-                            # print('')
-                            # # print('local_rank, loss: ', args.local_rank, loss)
-                            # # print("Local_rank {}, Loss {}".format(args.local_rank, loss))
-                            print("Epoch_W {}, Epoch {}, Step {}, Local_rank {}, Sub {}, Loss {}".format(epoch_wholeset, epoch, step, args.local_rank, idx_sub, loss))
-                            print('')
+                        # if global_step % 100 == 0:
+                        #     # print('')
+                        #     # # print('local_rank, loss: ', args.local_rank, loss)
+                        #     # # print("Local_rank {}, Loss {}".format(args.local_rank, loss))
+                        #     print("Epoch_W {}, Epoch {}, Step {}, Local_rank {}, Sub {}, Loss {}".format(epoch_wholeset, epoch, step, args.local_rank, idx_sub, loss))
+                        #     print('')
 
                         if args.n_gpu > 1:
                             loss = loss.mean()
@@ -418,6 +419,16 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                         # loss.backward()
                         
                         # added from TinyBERT (DK)
+                        # https://github.com/namisan/mt-dnn/blob/master/mt_dnn/model.py
+                        # or: https://zhuanlan.zhihu.com/p/350301395
+                        if args.local_rank != -1:
+                            copied_loss = copy.deepcopy(loss.data)
+                            torch.distributed.all_reduce(copied_loss)
+                            
+                            if global_step % 100 == 0:
+                                print("After all_reduce - Epoch_W {}, Epoch {}, Step {}, Local_rank {}, Sub {}, Loss {}".format(epoch_wholeset, epoch, step, args.local_rank, idx_sub, loss))
+                                print('')
+
                         if args.fp16:
                             optimizer.backward(loss)
                         else:
@@ -812,8 +823,8 @@ class PregeneratedDataset(Dataset):
             # for i, line in enumerate(tqdm(f, total=num_samples, desc="Training examples")):
             for i, line in enumerate(tqdm(f, total=num_samples, desc="Local_rank {}, Training examples".format(args.local_rank))):
                 
-                if i == 1000:
-                    break
+                # if i == 1000:
+                #     break
                 if i % 100000 == 0:
                     print("")
                     # print("local_rank, line i: ", args.local_rank, i)
