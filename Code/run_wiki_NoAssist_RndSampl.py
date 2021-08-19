@@ -181,9 +181,9 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
         #         "Please install apex from https://www.github.com/nvidia/apex to use distributed and fp16 training.")
         if teacher_model != None:
             # teacher_model = DDP(teacher_model)
-            teacher_model = torch.nn.parallel.DistributedDataParallel(teacher_model, device_ids=[args.local_rank], output_device=args.local_rank)
+            teacher_model = torch.nn.parallel.DistributedDataParallel(teacher_model, device_ids=[args.local_rank], output_device=args.local_rank, find_unused_parameters=True)
         #model = DDP(model)
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank, find_unused_parameters=True)
     elif n_gpu > 1:
         print("torch.nn.DataParallel!!!")
         model = torch.nn.DataParallel(model)
@@ -242,6 +242,10 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                             'token_type_ids': batch[2] if args.model_type in ['bert'] else None}
                     inputs_stu = {'input_ids': batch[0], 'attention_mask': batch[1], 'labels': batch[3][:, 0],
                             'token_type_ids': batch[2] if args.model_type in ['bert'] else None, 'is_student': True}
+
+                    print('')
+                    print("Epoch_W {}, Epoch {}, Step {}, Local_rank {}, Labels {}".format(epoch_wholeset, epoch, step, args.local_rank, batch[0][0]))
+                    print('')
 
                     # # prepare the hidden states and logits of the teacher model
                     # if args.training_phase == 'dynabertw' and teacher_model:
@@ -345,6 +349,10 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                             else: 
                                 hard_loss, student_logit, student_reps, student_atts, _ = model(**inputs_stu)
 
+                                # print('')
+                                # print("Epoch_W {}, Epoch {}, Step {}, Local_rank {}, Sub {}, Student_reps {}".format(epoch_wholeset, epoch, step, args.local_rank, idx_sub, student_reps[2][0]))
+                                # print('')
+
                                 # distillation loss of logits
                                 if args.output_mode == "classification":
                                     # logit_loss = soft_cross_entropy(student_logit, logits_max_all[width_idx].detach())
@@ -396,9 +404,9 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                             loss = model(**inputs_stu)[0]
 
                         if global_step % 100 == 0:
-                            print('')
-                            # print('local_rank, loss: ', args.local_rank, loss)
-                            # print("Local_rank {}, Loss {}".format(args.local_rank, loss))
+                            # print('')
+                            # # print('local_rank, loss: ', args.local_rank, loss)
+                            # # print("Local_rank {}, Loss {}".format(args.local_rank, loss))
                             print("Epoch_W {}, Epoch {}, Step {}, Local_rank {}, Sub {}, Loss {}".format(epoch_wholeset, epoch, step, args.local_rank, idx_sub, loss))
                             print('')
 
@@ -507,7 +515,8 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
         # tokenizer.save_vocabulary(args.output_dir)
         # torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))
 
-        if args.local_rank % torch.cuda.device_count() == 0:
+        # if args.local_rank % torch.cuda.device_count() == 0:
+        if args.local_rank in [-1, 0]:
             print('')
             print("Saving model checkpoint via GPU (local_rank) = {}".format(args.local_rank))
             print('')
@@ -803,8 +812,8 @@ class PregeneratedDataset(Dataset):
             # for i, line in enumerate(tqdm(f, total=num_samples, desc="Training examples")):
             for i, line in enumerate(tqdm(f, total=num_samples, desc="Local_rank {}, Training examples".format(args.local_rank))):
                 
-                # if i == 10000:
-                #     break
+                if i == 1000:
+                    break
                 if i % 100000 == 0:
                     print("")
                     # print("local_rank, line i: ", args.local_rank, i)
@@ -943,7 +952,7 @@ def main():
     parser.add_argument("--num_train_epochs_wholeset", default=3.0, type=float,
                         help="Total number of training epochs to perform.")
 
-    # for hidden_dim direction
+    # for intermediate ratio direction
     parser.add_argument('--intermediate_mult_list', type=str, default='1.',
                         help="the possible intermediate size used for training, e.g., '1.' is for default")
 
