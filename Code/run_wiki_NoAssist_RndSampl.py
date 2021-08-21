@@ -422,9 +422,14 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                         # https://github.com/namisan/mt-dnn/blob/master/mt_dnn/model.py
                         # or: https://zhuanlan.zhihu.com/p/350301395
                         if args.local_rank != -1:
-                            copied_loss = copy.deepcopy(loss.data)
-                            torch.distributed.all_reduce(copied_loss)
-                            
+                            # copied_loss = copy.deepcopy(loss.data)
+                            # torch.distributed.all_reduce(copied_loss)
+                            # loss = copied_loss / torch.distributed.get_world_size()
+
+                            copied_loss = loss.clone()
+                            torch.distributed.all_reduce(copied_loss, op=torch.distributed.ReduceOp.SUM)
+                            loss = copied_loss / torch.distributed.get_world_size()
+
                             if global_step % 100 == 0:
                                 print("After all_reduce - Epoch_W {}, Epoch {}, Step {}, Local_rank {}, Sub {}, Loss {}".format(epoch_wholeset, epoch, step, args.local_rank, idx_sub, loss))
                                 print('')
