@@ -1,4 +1,4 @@
-description: NoAssist_wiki_NoHard_PreModel_RndSampl
+description: NoAssist_wiki_NoHard_PreModel_RndSampl_LearnRates
 
 target:
   service: amlk8s
@@ -47,7 +47,7 @@ storage:
 
 search:
   job_template:
-    name: Epochs_{Num_Train_Epochs_WholeSet}
+    name: Epochs_{Num_Train_Epochs_WholeSet}_LR_{LR}
     sku: G16
     command:
       - python -m torch.distributed.launch --nproc_per_node=16 run_wiki_NoAssist_RndSampl.py
@@ -86,7 +86,7 @@ search:
       values: [128]
     - name: LR
       spec: discrete
-      values: [2e-5]
+      values: [5e-6, 1e-5, 2e-5, 4e-5, 8e-5, 16e-5, 32e-5] # [2e-5]
     - name: Per_GPU_Train_Batch_Size
       spec: discrete
       values: [64]
@@ -125,4 +125,4 @@ search:
       values: [0.01]
     - name: Num_Train_Epochs_WholeSet
       spec: discrete
-      values: [10]
+      values: [20]
