@@ -1,0 +1,128 @@
+description: NoAssist_wiki_NoHard_PreModel_RndSampl_SuperBase
+
+target:
+  service: amlk8s
+  # run "amlt target list amlk8s" to list the names of available AMLK8s targets
+  name: itphyperdgx2cl1
+  vc: hai3
+
+# target:
+#   service: amlk8s
+#   # run "amlt target list amlk8s" to list the names of available AMLK8s targets
+#   name: itplabrr1cl1
+#   vc: resrchvc
+
+# target:
+#   service: amlk8s
+#   # run "amlt target list amlk8s" to list the names of available AMLK8s targets
+#   name: itpeastusv100cl2
+#   vc: resrchvc
+
+environment:
+  image: pytorch/pytorch:1.4-cuda10.1-cudnn7-devel # pytorch/pytorch:1.0.1-cuda10.0-cudnn7-devel, 1.4-cuda10.1-cudnn7-devel, 1.6.0-cuda10.1-cudnn7-devel
+  setup:
+    - pip install -r requirements.txt
+    - pip install --user boto3
+    - pip install --user regex
+    - pip install --user sklearn
+    - pip install --user tensorflow-gpu==2.3.1
+    # - git clone https://github.com/NVIDIA/apex
+    # - cd apex
+    # - pip install -v --disable-pip-version-check --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./
+
+code:
+  # local directory of the code. this will be uploaded to the server.
+  # $CONFIG_DIR is expanded to the directory of this config file
+  local_dir: ../
+
+data:
+  local_dir:  ../../Data_and_Models
+  remote_dir: data_and_models
+
+storage:
+  output:
+    storage_account_name: dongkuan
+    container_name: dynabert
+    # mount_dir: /mnt/dynabertw
+
+search:
+  job_template:
+    name: Epochs_{Num_Train_Epochs_WholeSet}_LR_{LR}
+    sku: G16
+    command:
+      - python -m torch.distributed.launch --nproc_per_node=16 run_wiki_NoAssist_RndSampl.py
+        --model_type bert
+        --task_name {TASK_NAME}
+        --do_train
+        --data_dir $$AMLT_DATA_DIR/Data_GLUE/glue_data/{TASK_NAME}/
+        --pregenerated_data $$AMLT_DATA_DIR/English_Wiki/corpus_jsonfile_for_general_KD/
+        --model_dir $$AMLT_DATA_DIR/Local_models/pretrained_BERTs/BERT_base_uncased/
+        --output_dir $$AMLT_OUTPUT_DIR/
+        --max_seq_length {Max_Seq_Length}
+        --learning_rate {LR}
+        --per_gpu_train_batch_size {Per_GPU_Train_Batch_Size}
+        --num_train_epochs {Num_Train_Epochs}
+        --hidden_mult_list {Hidden_Mult_List}
+        --depth_mult_list {Depth_Mult_List}
+        --width_mult_list {Width_Mult_List}
+        --intermediate_mult_list {Intermediate_Mult_List}
+        --depth_lambda1 {Depth_Lambda1}
+        --depth_lambda2 {Depth_Lambda2}
+        --depth_lambda3 {Depth_Lambda3}
+        --depth_lambda4 {Depth_Lambda4}
+        --training_phase {Training_Phase}
+        --output_cache_dir $$AMLT_OUTPUT_DIR/cache
+        --weight_decay {Weight_Decay}
+        --num_train_epochs_wholeset {Num_Train_Epochs_WholeSet}
+  type: grid
+  max_trials: 100
+  # parallel_trials: 2 ???
+  params:
+    - name: TASK_NAME
+      spec: discrete
+      values: ['MRPC']
+    - name: Max_Seq_Length
+      spec: discrete
+      values: [128]
+    - name: LR
+      spec: discrete
+      values: [2e-5] # [2e-5]
+    - name: Per_GPU_Train_Batch_Size
+      spec: discrete
+      values: [64]
+    - name: Num_Train_Epochs
+      spec: discrete
+      values: [3]
+    - name: Hidden_Mult_List
+      spec: discrete
+      values: ['0.75,0.76315789473684215,0.77631578947368418,0.78947368421052633,0.80263157894736836,0.81578947368421051,0.82894736842105265,0.84210526315789469,0.85526315789473684,0.86842105263157898,0.88157894736842102,0.89473684210526316,0.90789473684210531,0.92105263157894735,0.93421052631578949,0.94736842105263164,0.96052631578947367,0.97368421052631571,0.98684210526315785,1.0'] # hidden_sizes: ['9/12, ..., 12/12'], num = 20
+    - name: Depth_Mult_List
+      spec: discrete
+      values: ['0.41667,0.5'] # layer_numbers: [5/12, ..., 6/12], num = 2
+    - name: Width_Mult_List
+      spec: discrete
+      values: ['0.75,0.83333,0.91667,1.0'] # head_numbers: [9/12, ..., 12/12], num = 4
+    - name: Intermediate_Mult_List
+      spec: discrete
+      values: ['3.0,3.0526315789473686,3.1052631578947367,3.1578947368421053,3.2105263157894735,3.263157894736842,3.3157894736842106,3.3684210526315788,3.4210526315789473,3.4736842105263159,3.5263157894736841,3.5789473684210527,3.6315789473684212,3.6842105263157894,3.736842105263158,3.7894736842105265,3.8421052631578947,3.8947368421052628,3.9473684210526314,4.0'] # intermediate_size: ['3.0, ... ,4.0'], num = 20
+    - name: Depth_Lambda1
+      spec: discrete
+      values: [1.0]
+    - name: Depth_Lambda2
+      spec: discrete
+      values: [1.0]
+    - name: Depth_Lambda3
+      spec: discrete
+      values: [0.001]
+    - name: Depth_Lambda4
+      spec: discrete
+      values: [0.0]
+    - name: Training_Phase
+      spec: discrete
+      values: ['dynabert']
+    - name: Weight_Decay
+      spec: discrete
+      values: [0.01]
+    - name: Num_Train_Epochs_WholeSet
+      spec: discrete
+      values: [10]
