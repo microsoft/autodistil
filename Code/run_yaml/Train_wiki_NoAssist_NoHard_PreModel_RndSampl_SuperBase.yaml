@@ -47,7 +47,7 @@ storage:
 
 search:
   job_template:
-    name: Epochs_{Num_Train_Epochs_WholeSet}_LR_{LR}
+    name: Epochs_{Num_Train_Epochs_WholeSet}_SuperBase_LR_{LR}
     sku: G16
     command:
       - python -m torch.distributed.launch --nproc_per_node=16 run_wiki_NoAssist_RndSampl.py
