@@ -192,7 +192,8 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
             teacher_model = torch.nn.DataParallel(teacher_model)
     
     # all sub_nets
-    subs_all = list(itertools.product(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list, args.intermediate_mult_list))
+    # subs_all = list(itertools.product(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list, args.intermediate_mult_list))
+    subs_all_para, subs_all = subs_para_range(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list, args.intermediate_mult_list, args.start_size, args.stop_size, args.subs_num)
 
     global_step = 0
     model.zero_grad()
@@ -996,6 +997,13 @@ def main():
     # for intermediate ratio direction
     parser.add_argument('--intermediate_mult_list', type=str, default='1.',
                         help="the possible intermediate size used for training, e.g., '1.' is for default")
+
+    parser.add_argument("--start_size", default=40000000.0, type=float,
+                        help="The min size of sampled sub nets.")
+    parser.add_argument("--stop_size", default=70000000.0, type=float,
+                        help="The max size of sampled sub nets.")
+    parser.add_argument("--subs_num", default=3200, type=int,
+                        help="The num of sub nets that we are interested in during sampling.")
 
     args = parser.parse_args()
 
