@@ -50,6 +50,7 @@ from transformers import glue_convert_examples_to_features as convert_examples_t
 import sys
 import json
 import copy
+from fractions import Fraction
 
 logger = logging.getLogger(__name__)
 CONFIG_NAME = "config.json"
@@ -185,12 +186,19 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
             teacher_model = torch.nn.parallel.DistributedDataParallel(teacher_model, device_ids=[args.local_rank], output_device=args.local_rank, find_unused_parameters=True)
         #model = DDP(model)
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank, find_unused_parameters=True)
-    elif n_gpu > 1:
+    elif args.n_gpu > 1:
         print("torch.nn.DataParallel!!!")
         model = torch.nn.DataParallel(model)
         if teacher_model != None:
             teacher_model = torch.nn.DataParallel(teacher_model)
+    
+    # prepare sub_nets
+    subs_para_sorted, subs_sorted = subs_para_range(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list, args.intermediate_mult_list, args.start_size, args.stop_size, args.subs_num)
 
+    # print('')
+    # print('len(subs_sorted): ', len(subs_sorted))
+    # print('subs_sorted[-5:]: ', subs_sorted[-5:])
+    # print('')
 
     global_step = 0
     model.zero_grad()
@@ -256,12 +264,13 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                     #         # _, teacher_logit, teacher_reps, _, _ = teacher_model(**inputs)
                     #         _, teacher_logit, teacher_reps, teacher_atts, _ = teacher_model(**inputs)
                     
-                    # prepare sub-nets
-                    # subs_all = list(itertools.product(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list))
-                    subs_all = list(itertools.product(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list, args.intermediate_mult_list))
+                    # prepare sub_nets
+                    # # subs_sorted = list(itertools.product(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list))
+                    # subs_sorted = list(itertools.product(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list, args.intermediate_mult_list))
                     # random.seed(int(global_step * torch.distributed.get_world_size())) ???
                     random.seed(int(global_step))                  
-                    subs_sampled = [subs_all[-1], subs_all[0]] + random.sample(subs_all[1:-1], 2) # four subs: largest, smallest, two randomly sampled
+                    subs_sampled = [subs_sorted[-1], subs_sorted[0]] + random.sample(subs_sorted[1:-1], 2) # four subs: largest, smallest, two randomly sampled
+                    
                     # print('subs_sampled: ', subs_sampled)
                     # print('')
                     # print("Epoch_W {}, Epoch {}, Step {}, Local_rank {}, subs_sampled {}".format(epoch_wholeset, epoch, step, args.local_rank, subs_sampled))
@@ -866,6 +875,31 @@ class PregeneratedDataset(Dataset):
                 torch.tensor(self.lm_label_ids[item].astype(np.int64)),
                 torch.tensor(int(self.is_nexts[item])))
 
+def cal_para_bert(archi):
+    # emb: 768*30522
+    # att*12: 768x768*4*12
+    # ff*12: 768x768*4*2*12
+    # pred: 768x768*2
+    # 23.8 + 28.3 + 56.6 + 1.2 = 109.9
+    # L, A, H, R= 12, 12, 768, 4.0
+    L, A, H, R = archi[0]*12, archi[1]*12, archi[2]*768, archi[3]
+    return H*30522 + H*H*4*A/12*L + H*H*R*2*L + H*H*2
+
+
+def subs_para_range(depth_mult_list, width_mult_list, hidden_mult_list, intermediate_mult_list, start_size, stop_size, subs_num):
+    subs = list(itertools.product(depth_mult_list, width_mult_list, hidden_mult_list, intermediate_mult_list))
+    subs_para = list(map(cal_para_bert, subs))
+    subs_para_sorted, subs_sorted = (list(t) for t in zip(*sorted(zip(subs_para, subs)))) # sort both subs_para and subs in terms of subs_para
+    # all sub nets
+    if subs_num == -1:
+        return subs_para_sorted[:], subs_sorted[:]
+    # the num of largest sub-nets
+    elif subs_num > 0:
+        return subs_para_sorted[-subs_num:], subs_sorted[-subs_num:]
+    # [start_size, stop_size]
+    else:
+        idx = np.where((np.array(subs_para_sorted) >= start_size) & (np.array(subs_para_sorted) <= stop_size))[-1]
+        return subs_para_sorted[idx[0]:idx[-1]+1], subs_sorted[idx[0]:idx[-1]+1]
 
 def main():
     parser = argparse.ArgumentParser()
@@ -914,8 +948,10 @@ def main():
 
     parser.add_argument('--data_aug', action='store_true', help="whether using data augmentation")
     # for depth direction
-    parser.add_argument('--depth_mult_list', type=str, default='1.',
-                        help="the possible depths used for training, e.g., '1.' is for default")
+    # parser.add_argument('--depth_mult_list', type=str, default='1.',
+    #                     help="the possible depths used for training, e.g., '1.' is for default")
+    parser.add_argument('--depth_mult_list', type=str, default='1/12,6/12,6',
+                        help="the possible depths used for training")
     parser.add_argument("--depth_lambda1", default=1.0, type=float,
                         help="logit matching coef.")
     parser.add_argument("--depth_lambda2", default=1.0, type=float,
@@ -925,9 +961,11 @@ def main():
     parser.add_argument("--depth_lambda4", default=1.0, type=float,
                         help="hard label matching coef.")
     # for width direction (changing hidden_dim)
-    parser.add_argument('--width_mult_list', type=str, default='1.',
-                        help="the possible widths used for training, e.g., '1.' is for separate training "
-                             "while '0.25,0.5,0.75,1.0' is for vanilla slimmable training")
+    # parser.add_argument('--width_mult_list', type=str, default='1.',
+    #                     help="the possible widths used for training, e.g., '1.' is for separate training "
+    #                          "while '0.25,0.5,0.75,1.0' is for vanilla slimmable training")
+    parser.add_argument('--width_mult_list', type=str, default='1/12,12/12,12',
+                        help="the possible widths used for training")
     parser.add_argument("--width_lambda1", default=1.0, type=float,
                         help="logit matching coef.")
     parser.add_argument("--width_lambda2", default=1.0, type=float,
@@ -943,8 +981,10 @@ def main():
     parser.add_argument('--printloss_step', type=int, default=100)
 
     # for hidden_dim direction
-    parser.add_argument('--hidden_mult_list', type=str, default='1.',
-                        help="the possible depths used for training, e.g., '1.' is for default")
+    # parser.add_argument('--hidden_mult_list', type=str, default='1.',
+    #                     help="the possible depths used for training, e.g., '1.' is for default")
+    parser.add_argument('--hidden_mult_list', type=str, default='1/12,12/12,12',
+                        help="the possible depths used for training")
 
     parser.add_argument("--pregenerated_data",
                         type=Path,
@@ -969,15 +1009,35 @@ def main():
                         help="Total number of training epochs to perform.")
 
     # for intermediate ratio direction
-    parser.add_argument('--intermediate_mult_list', type=str, default='1.',
-                        help="the possible intermediate size used for training, e.g., '1.' is for default")
+    # parser.add_argument('--intermediate_mult_list', type=str, default='1.',
+    #                     help="the possible intermediate size used for training, e.g., '1.' is for default")
+    parser.add_argument('--intermediate_mult_list', type=str, default='1.0,4.0,13',
+                        help="the possible intermediate size used for training")
+
+    parser.add_argument("--start_size", default=40000000.0, type=float,
+                        help="The min size of sampled sub nets.")
+    parser.add_argument("--stop_size", default=70000000.0, type=float,
+                        help="The max size of sampled sub nets.")
+    parser.add_argument("--subs_num", default=3200, type=int,
+                        help="The num of sub nets in sampling. '-1' indicates all sub nets. '0' indicates min-max. '>0' indicates specific num. ")
 
     args = parser.parse_args()
 
-    args.width_mult_list = [float(width) for width in args.width_mult_list.split(',')]
-    args.depth_mult_list = [float(depth) for depth in args.depth_mult_list.split(',')]
-    args.hidden_mult_list = [float(hidden) for hidden in args.hidden_mult_list.split(',')]
-    args.intermediate_mult_list = [float(intermediate) for intermediate in args.intermediate_mult_list.split(',')]
+    # args.width_mult_list = [float(width) for width in args.width_mult_list.split(',')]
+    # args.depth_mult_list = [float(depth) for depth in args.depth_mult_list.split(',')]
+    # args.hidden_mult_list = [float(hidden) for hidden in args.hidden_mult_list.split(',')]
+    # args.intermediate_mult_list = [float(intermediate) for intermediate in args.intermediate_mult_list.split(',')]
+
+    width_tmp = [float(Fraction(width)) for width in args.width_mult_list.split(',')]
+    depth_tmp = [float(Fraction(depth)) for depth in args.depth_mult_list.split(',')]
+    hidden_tmp = [float(Fraction(hidden)) for hidden in args.hidden_mult_list.split(',')]
+    intermediate_tmp = [float(Fraction(intermediate)) for intermediate in args.intermediate_mult_list.split(',')]
+    
+    args.width_mult_list = list(np.linspace(width_tmp[0], width_tmp[1], num=int(width_tmp[2])))
+    args.depth_mult_list = list(np.linspace(depth_tmp[0], depth_tmp[1], num=int(depth_tmp[2])))
+    args.hidden_mult_list = list(np.linspace(hidden_tmp[0], hidden_tmp[1], num=int(hidden_tmp[2])))
+    args.intermediate_mult_list = list(np.linspace(intermediate_tmp[0], intermediate_tmp[1], num=int(intermediate_tmp[2])))
+    
 
     # added from TinyBERT (DK)
     samples_per_epoch = []

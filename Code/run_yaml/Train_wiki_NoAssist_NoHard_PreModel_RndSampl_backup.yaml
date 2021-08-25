@@ -1,4 +1,4 @@
-description: NoAssist_wiki_NoHard_PreModel_RndSampl_SuperBase_GivenSubNum
+description: NoAssist_wiki_NoHard_PreModel_RndSampl_LearnRates
 
 target:
   service: amlk8s
@@ -74,9 +74,6 @@ search:
         --output_cache_dir $$AMLT_OUTPUT_DIR/cache
         --weight_decay {Weight_Decay}
         --num_train_epochs_wholeset {Num_Train_Epochs_WholeSet}
-        --subs_num {Subs_Num}
-        # --start_size {Start_Size}
-        # --stop_size {Stop_Size}
   type: grid
   max_trials: 100
   # parallel_trials: 2 ???
@@ -89,25 +86,25 @@ search:
       values: [128]
     - name: LR
       spec: discrete
-      values: [2e-5] # [1e-5, 2e-5, 4e-5, 8e-5, 16e-5]
+      values: [1e-5, 2e-5, 4e-5, 8e-5, 16e-5] # [2e-5]
     - name: Per_GPU_Train_Batch_Size
       spec: discrete
       values: [64]
     - name: Num_Train_Epochs
       spec: discrete
       values: [3]
-    - name: Depth_Mult_List
-      spec: discrete
-      values: ['1/12,6/12,6']
-    - name: Width_Mult_List
-      spec: discrete
-      values: ['1/12,12/12,12']
     - name: Hidden_Mult_List
       spec: discrete
-      values: ['1/12,12/12,12']
+      values: ['0.08333,0.16667,0.25,0.33333,0.41667,0.5,0.58333,0.66667,0.75,0.83333,0.91667,1.0'] # hidden_sizes: [1/12, 2/12, ..., 12/12] * 768
+    - name: Depth_Mult_List
+      spec: discrete
+      values: ['0.08333,0.16667,0.25,0.33333,0.41667,0.5'] # layer_numbers: [1/12, 2/12, ..., 6/12] * 12
+    - name: Width_Mult_List
+      spec: discrete
+      values: ['0.08333,0.16667,0.25,0.33333,0.41667,0.5,0.58333,0.66667,0.75,0.83333,0.91667,1.0'] # head_numbers: [1/12, 2/12, ..., 12/12] * 12
     - name: Intermediate_Mult_List
       spec: discrete
-      values: ['1.0,4.0,13']
+      values: ['1.0,1.25,1.5,1.75,2.0,2.25,2.5,2.75,3.0,3.25,3.5,3.75,4.0'] # intermediate_size: *13
     - name: Depth_Lambda1
       spec: discrete
       values: [1.0]
@@ -128,13 +125,4 @@ search:
       values: [0.01]
     - name: Num_Train_Epochs_WholeSet
       spec: discrete
-      values: [10]
-    - name: Subs_Num
-      spec: discrete
-      values: [3200]
-    # - name: Start_Size
-    #   spec: discrete
-    #   values: [40000000.0]
-    # - name: Stop_Size
-    #   spec: discrete
-    #   values: [70000000.0]
+      values: [20]
