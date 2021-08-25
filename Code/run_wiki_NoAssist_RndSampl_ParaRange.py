@@ -185,15 +185,14 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
             teacher_model = torch.nn.parallel.DistributedDataParallel(teacher_model, device_ids=[args.local_rank], output_device=args.local_rank, find_unused_parameters=True)
         #model = DDP(model)
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank, find_unused_parameters=True)
-    elif n_gpu > 1:
+    elif args.n_gpu > 1:
         print("torch.nn.DataParallel!!!")
         model = torch.nn.DataParallel(model)
         if teacher_model != None:
             teacher_model = torch.nn.DataParallel(teacher_model)
     
-    # all sub_nets
-    # subs_all = list(itertools.product(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list, args.intermediate_mult_list))
-    subs_all_para, subs_all = subs_para_range(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list, args.intermediate_mult_list, args.start_size, args.stop_size, args.subs_num)
+    # prepare sub_nets
+    subs_para_sorted, subs_sorted = subs_para_range(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list, args.intermediate_mult_list, args.start_size, args.stop_size, args.subs_num)
 
     global_step = 0
     model.zero_grad()
@@ -260,11 +259,12 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                     #         _, teacher_logit, teacher_reps, teacher_atts, _ = teacher_model(**inputs)
                     
                     # prepare sub_nets
-                    # # subs_all = list(itertools.product(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list))
-                    # subs_all = list(itertools.product(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list, args.intermediate_mult_list))
+                    # # subs_sorted = list(itertools.product(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list))
+                    # subs_sorted = list(itertools.product(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list, args.intermediate_mult_list))
                     # random.seed(int(global_step * torch.distributed.get_world_size())) ???
                     random.seed(int(global_step))                  
-                    subs_sampled = [subs_all[-1], subs_all[0]] + random.sample(subs_all[1:-1], 2) # four subs: largest, smallest, two randomly sampled
+                    subs_sampled = [subs_sorted[-1], subs_sorted[0]] + random.sample(subs_sorted[1:-1], 2) # four subs: largest, smallest, two randomly sampled
+                    
                     # print('subs_sampled: ', subs_sampled)
                     # print('')
                     # print("Epoch_W {}, Epoch {}, Step {}, Local_rank {}, subs_sampled {}".format(epoch_wholeset, epoch, step, args.local_rank, subs_sampled))
@@ -869,24 +869,24 @@ class PregeneratedDataset(Dataset):
                 torch.tensor(self.lm_label_ids[item].astype(np.int64)),
                 torch.tensor(int(self.is_nexts[item])))
 
-def cal_para(archi):
+def cal_para_bert(archi):
     # emb: 768*30522
     # att*12: 768x768*4*12
     # ff*12: 768x768*4*2*12
     # pred: 768x768*2
     # 23.8 + 28.3 + 56.6 + 1.2 = 109.9
     # H, L, A = 768, 12, 12
-
     H, L, A, R = archi[0], archi[1], archi[2], archi[3]
 
     return H*30522 + H*H*4*A/12*L + H*H*R*2*L + H*H*2
 
-# subs_all = list(itertools.product(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list, args.intermediate_mult_list))
-def subs_para_range(depth_mult_list, width_mult_list, hidden_mult_list, intermediate_mult_list, start_size, stop_size, num):
-    subs = list(itertools.product(depth_mult_list, width_mult_list, hidden_mult_list, intermediate_mult_list))
-    subs_para = list(map(cal_para, subs))
 
-    subs_para_sorted, subs_sorted = (list(t) for t in zip(*sorted(zip(subs_para, subs))))
+def subs_para_range(depth_mult_list, width_mult_list, hidden_mult_list, intermediate_mult_list, start_size, stop_size, num):
+    # two options: 1) given [start_size, stop_size], or 2) given the num of largest sub-nets
+    subs = list(itertools.product(depth_mult_list, width_mult_list, hidden_mult_list, intermediate_mult_list))
+    subs_para = list(map(cal_para_bert, subs))
+
+    subs_para_sorted, subs_sorted = (list(t) for t in zip(*sorted(zip(subs_para, subs)))) # sort both subs_para and subs in terms of subs_para
     if num != 0:
         return subs_para_sorted[-num:], subs_sorted[-num:]
     else:
