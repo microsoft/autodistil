@@ -310,7 +310,7 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                         model.apply(lambda m: setattr(m, 'intermediate_mult', subs_sampled[idx_sub][3]))
 
                         # print('model: ', model)
-                                
+
                         # stage 2: width- and depth- adaptive
                         if args.training_phase == 'dynabert':
                             if getattr(args, 'data_aug'):
