@@ -1,4 +1,4 @@
-description: NoAssist_wiki_NoHard_PreModel_RndSampl_SuperBase_GivenSubNum
+description: NoAssist_wiki_NoHard_PreModel_RndSampl_SuperBase_GivenSubNum_AttLossWork
 
 target:
   service: amlk8s
@@ -113,10 +113,10 @@ search:
       values: [1.0]
     - name: Depth_Lambda2
       spec: discrete
-      values: [1.0]
+      values: [10.0]
     - name: Depth_Lambda3
       spec: discrete
-      values: [0.001]
+      values: [0.01]
     - name: Depth_Lambda4
       spec: discrete
       values: [0.0]

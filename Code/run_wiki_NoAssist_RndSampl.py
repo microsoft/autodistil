@@ -350,24 +350,24 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                                 # student_att, teacher_att = student_atts[-1], atts_max_all[width_idx][kept_layers_index[-2]] # '-2'??? check it again
 
                                 # student_att, teacher_att = student_atts[-1], teacher_atts[-1] 
-                                # student_att = torch.where(student_att <= -1e2, torch.zeros_like(student_att).to(args.device),
+                                # # student_att = torch.where(student_att <= -1e2, torch.zeros_like(student_att).to(args.device),
                                 #                 student_att)
-                                # teacher_att = torch.where(teacher_att <= -1e2, torch.zeros_like(teacher_att).to(args.device),
+                                # # teacher_att = torch.where(teacher_att <= -1e2, torch.zeros_like(teacher_att).to(args.device),
                                 #                 teacher_att)
                                 # att_loss = loss_mse(torch.sum(student_att, dim=1), torch.sum(teacher_att.detach(), dim=1))
 
 
                                 student_att_QQ, teacher_att_QQ = student_atts_QQ[-1], teacher_atts_QQ[-1]
-                                student_att_QQ = torch.where(student_att_QQ <= -1e2, torch.zeros_like(student_att_QQ).to(args.device), student_att_QQ)
-                                teacher_att_QQ = torch.where(teacher_att_QQ <= -1e2, torch.zeros_like(teacher_att_QQ).to(args.device), teacher_att_QQ)
+                                # student_att_QQ = torch.where(student_att_QQ <= -1e2, torch.zeros_like(student_att_QQ).to(args.device), student_att_QQ)
+                                # teacher_att_QQ = torch.where(teacher_att_QQ <= -1e2, torch.zeros_like(teacher_att_QQ).to(args.device), teacher_att_QQ)
                                 
                                 student_att_KK, teacher_att_KK = student_atts_KK[-1], teacher_atts_KK[-1]
-                                student_att_KK = torch.where(student_att_KK <= -1e2, torch.zeros_like(student_att_KK).to(args.device), student_att_KK)
-                                teacher_att_KK = torch.where(teacher_att_KK <= -1e2, torch.zeros_like(teacher_att_KK).to(args.device), teacher_att_KK)
+                                # student_att_KK = torch.where(student_att_KK <= -1e2, torch.zeros_like(student_att_KK).to(args.device), student_att_KK)
+                                # teacher_att_KK = torch.where(teacher_att_KK <= -1e2, torch.zeros_like(teacher_att_KK).to(args.device), teacher_att_KK)
 
                                 student_att_VV, teacher_att_VV = student_atts_VV[-1], teacher_atts_VV[-1]
-                                student_att_VV = torch.where(student_att_VV <= -1e2, torch.zeros_like(student_att_VV).to(args.device), student_att_VV)
-                                teacher_att_VV = torch.where(teacher_att_VV <= -1e2, torch.zeros_like(teacher_att_VV).to(args.device), teacher_att_VV)
+                                # student_att_VV = torch.where(student_att_VV <= -1e2, torch.zeros_like(student_att_VV).to(args.device), student_att_VV)
+                                # teacher_att_VV = torch.where(teacher_att_VV <= -1e2, torch.zeros_like(teacher_att_VV).to(args.device), teacher_att_VV)
 
                                 att_loss = loss_mse(student_att_QQ, teacher_att_QQ.detach()) + loss_mse(student_att_KK, teacher_att_KK.detach()) + loss_mse(student_att_VV, teacher_att_VV.detach())
 
@@ -414,24 +414,24 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                                 # student_att, teacher_att = student_atts[-1], atts_max_all[width_idx][kept_layers_index[-2]] # '-2'??? check it again
 
                                 # student_att, teacher_att = student_atts[-1], teacher_atts[-1]
-                                # student_att = torch.where(student_att <= -1e2, torch.zeros_like(student_att).to(args.device),
+                                # # student_att = torch.where(student_att <= -1e2, torch.zeros_like(student_att).to(args.device),
                                 #                 student_att)
-                                # teacher_att = torch.where(teacher_att <= -1e2, torch.zeros_like(teacher_att).to(args.device),
+                                # # teacher_att = torch.where(teacher_att <= -1e2, torch.zeros_like(teacher_att).to(args.device),
                                 #                 teacher_att)
                                 # att_loss = loss_mse(torch.sum(student_att, dim=1), torch.sum(teacher_att.detach(), dim=1))
 
 
                                 student_att_QQ, teacher_att_QQ = student_atts_QQ[-1], teacher_atts_QQ[-1]
-                                student_att_QQ = torch.where(student_att_QQ <= -1e2, torch.zeros_like(student_att_QQ).to(args.device), student_att_QQ)
-                                teacher_att_QQ = torch.where(teacher_att_QQ <= -1e2, torch.zeros_like(teacher_att_QQ).to(args.device), teacher_att_QQ)
+                                # student_att_QQ = torch.where(student_att_QQ <= -1e2, torch.zeros_like(student_att_QQ).to(args.device), student_att_QQ)
+                                # teacher_att_QQ = torch.where(teacher_att_QQ <= -1e2, torch.zeros_like(teacher_att_QQ).to(args.device), teacher_att_QQ)
                                 
                                 student_att_KK, teacher_att_KK = student_atts_KK[-1], teacher_atts_KK[-1]
-                                student_att_KK = torch.where(student_att_KK <= -1e2, torch.zeros_like(student_att_KK).to(args.device), student_att_KK)
-                                teacher_att_KK = torch.where(teacher_att_KK <= -1e2, torch.zeros_like(teacher_att_KK).to(args.device), teacher_att_KK)
+                                # student_att_KK = torch.where(student_att_KK <= -1e2, torch.zeros_like(student_att_KK).to(args.device), student_att_KK)
+                                # teacher_att_KK = torch.where(teacher_att_KK <= -1e2, torch.zeros_like(teacher_att_KK).to(args.device), teacher_att_KK)
 
                                 student_att_VV, teacher_att_VV = student_atts_VV[-1], teacher_atts_VV[-1]
-                                student_att_VV = torch.where(student_att_VV <= -1e2, torch.zeros_like(student_att_VV).to(args.device), student_att_VV)
-                                teacher_att_VV = torch.where(teacher_att_VV <= -1e2, torch.zeros_like(teacher_att_VV).to(args.device), teacher_att_VV)
+                                # student_att_VV = torch.where(student_att_VV <= -1e2, torch.zeros_like(student_att_VV).to(args.device), student_att_VV)
+                                # teacher_att_VV = torch.where(teacher_att_VV <= -1e2, torch.zeros_like(teacher_att_VV).to(args.device), teacher_att_VV)
 
                                 att_loss = loss_mse(student_att_QQ, teacher_att_QQ.detach()) + loss_mse(student_att_KK, teacher_att_KK.detach()) + loss_mse(student_att_VV, teacher_att_VV.detach())
 
