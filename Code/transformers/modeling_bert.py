@@ -489,8 +489,16 @@ class BertSelfAttention_v1(nn.Module):
 
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
 
+        self.num_attention_heads_teacher = 12
+        self.attention_head_size_adjusted = self.attention_head_size
+
     def transpose_for_scores(self, x):
         new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
+        x = x.view(*new_x_shape)
+        return x.permute(0, 2, 1, 3)
+
+    def transpose_for_scores_for_KD(self, x):
+        new_x_shape = x.size()[:-1] + (self.num_attention_heads_teacher, self.attention_head_size_adjusted)
         x = x.view(*new_x_shape)
         return x.permute(0, 2, 1, 3)
 
@@ -507,11 +515,32 @@ class BertSelfAttention_v1(nn.Module):
         value_layer = self.transpose_for_scores(mixed_value_layer)
 
         # Take the dot product between "query" and "key" to get the raw attention scores.
-        attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2)) # [batch, head, length, length]
+        attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2)) # [batch, 'head', length, length]
         attention_scores = attention_scores / math.sqrt(self.attention_head_size)
         if attention_mask is not None:
             # Apply the attention mask is (precomputed for all layers in BertModel forward() function)
             attention_scores = attention_scores + attention_mask
+
+        # added by DK
+        self.attention_head_size_adjusted = self.all_head_size // self.num_attention_heads_teacher
+        all_head_size_round = int(self.attention_head_size_adjusted * self.num_attention_heads_teacher)
+        query_layer_KD = self.transpose_for_scores_for_KD(mixed_query_layer[:,:,:all_head_size_round]) # [batch, 12, length, 'head_size']
+        key_layer_KD = self.transpose_for_scores_for_KD(mixed_key_layer[:,:,:all_head_size_round])
+        value_layer_KD = self.transpose_for_scores_for_KD(mixed_value_layer[:,:,:all_head_size_round])
+
+        attention_scores_QQ = torch.matmul(query_layer_KD, query_layer_KD.transpose(-1, -2)) # [batch, 12, length, length]
+        attention_scores_KK = torch.matmul(key_layer_KD, key_layer_KD.transpose(-1, -2))
+        attention_scores_VV = torch.matmul(value_layer_KD, value_layer_KD.transpose(-1, -2))
+        attention_scores_QQ = attention_scores_QQ / math.sqrt(self.attention_head_size_adjusted)
+        attention_scores_KK = attention_scores_KK / math.sqrt(self.attention_head_size_adjusted)
+        attention_scores_VV = attention_scores_VV / math.sqrt(self.attention_head_size_adjusted)        
+
+        if attention_mask is not None:
+            # Apply the attention mask is (precomputed for all layers in BertModel forward() function)
+            attention_scores_QQ = attention_scores_QQ + attention_mask
+            attention_scores_KK = attention_scores_KK + attention_mask
+            attention_scores_VV = attention_scores_VV + attention_mask
+
 
         # Normalize the attention scores to probabilities.
         attention_probs = nn.Softmax(dim=-1)(attention_scores)
@@ -531,7 +560,8 @@ class BertSelfAttention_v1(nn.Module):
         context_layer = context_layer.view(*new_context_layer_shape)
 
         # output attention scores when needed
-        outputs = (context_layer, attention_scores) if self.output_attentions else (context_layer,)
+        # outputs = (context_layer, attention_scores) if self.output_attentions else (context_layer,)
+        outputs = (context_layer, attention_scores, attention_scores_QQ, attention_scores_KK, attention_scores_VV) if self.output_attentions else (context_layer,)
         return outputs
 
 
@@ -644,7 +674,7 @@ class BertAttention_v1(nn.Module):
         self_outputs = self.self(input_tensor, attention_mask, head_mask)
         attention_output = self.output(self_outputs[0], input_tensor)
         outputs = (attention_output,) + self_outputs[1:]
-        return outputs
+        return outputs # (attention_output, attention_scores, attention_scores_QQ, attention_scores_KK, attention_scores_VV)
 
 
 class BertIntermediate(nn.Module):
@@ -819,8 +849,10 @@ class BertLayer_v1(nn.Module):
         layer_output = self.output(intermediate_output, attention_output)
 
         if self.output_intermediate:
+            # (layer_output, attention_scores, attention_scores_QQ, attention_scores_KK, attention_scores_VV, intermediate_output)
             outputs = (layer_output,) + attention_outputs[1:] + (intermediate_output,)
         else:
+            # (layer_output, attention_scores, attention_scores_QQ, attention_scores_KK, attention_scores_VV)
             outputs = (layer_output,) + attention_outputs[1:]
 
         return outputs
@@ -888,6 +920,10 @@ class BertEncoder_v1(nn.Module):
         all_hidden_states = ()
         all_attentions = ()
         all_intermediate = ()
+        # added by DK
+        all_attentions_QQ = ()
+        all_attentions_KK = ()
+        all_attentions_VV = ()
 
         # uniformly remove layers
         depth = round(self.depth_mult * len(self.layer))
@@ -905,10 +941,19 @@ class BertEncoder_v1(nn.Module):
             layer_outputs = layer_module(hidden_states, attention_mask, head_mask[i])
             hidden_states = layer_outputs[0]
 
+            # if self.output_attentions:
+            #     all_attentions = all_attentions + (layer_outputs[1],)
+            # if self.output_intermediate:
+            #     all_intermediate = all_intermediate + (layer_outputs[2],)
+
             if self.output_attentions:
                 all_attentions = all_attentions + (layer_outputs[1],)
+                all_attentions_QQ = all_attentions_QQ + (layer_outputs[2],)
+                all_attentions_KK = all_attentions_KK + (layer_outputs[3],)
+                all_attentions_VV = all_attentions_VV + (layer_outputs[4],)
             if self.output_intermediate:
-                all_intermediate = all_intermediate + (layer_outputs[2],)
+                all_intermediate = all_intermediate + (layer_outputs[5],)
+
 
         # Add last layer
         if self.output_hidden_states:
@@ -919,9 +964,12 @@ class BertEncoder_v1(nn.Module):
             outputs = outputs + (all_hidden_states,)
         if self.output_attentions:
             outputs = outputs + (all_attentions,)
+            outputs = outputs + (all_attentions_QQ,)
+            outputs = outputs + (all_attentions_KK,)
+            outputs = outputs + (all_attentions_VV,)
         if self.output_intermediate:
             outputs = outputs + (all_intermediate,)
-        return outputs  # last-layer hidden state, (all hidden states), (all attentions)
+        return outputs  # last-layer hidden state, (all hidden states), (all attentions), (all attentions QQ), (all attentions KK), (all attentions VV), (all_intermediate)
 
 
 class BertPooler(nn.Module):
@@ -1110,6 +1158,7 @@ class BertModel_v1(BertPreTrainedModel):
         sequence_output = encoder_outputs[0]
         pooled_output = self.pooler(sequence_output)
 
+        # sequence_output, pooled_output, (all hidden states), (all attentions), (all attentions QQ), (all attentions KK), (all attentions VV), (all_intermediate)
         outputs = (sequence_output, pooled_output,) + encoder_outputs[1:]
         return outputs
 
@@ -1245,7 +1294,7 @@ class BertForSequenceClassification_v1_AddHidLoss(BertPreTrainedModel):
     def forward(self, input_ids, attention_mask=None, token_type_ids=None,
                 position_ids=None, head_mask=None, labels=None, is_student=False):
 
-        # outputs = (sequence_output, pooled_output,) + encoder_outputs[1:]
+        # outputs = sequence_output, pooled_output, (all hidden states), (all attentions), (all attentions QQ), (all attentions KK), (all attentions VV), (all_intermediate)
         outputs = self.bert(input_ids,
                             attention_mask=attention_mask,
                             token_type_ids=token_type_ids,
@@ -1278,5 +1327,5 @@ class BertForSequenceClassification_v1_AddHidLoss(BertPreTrainedModel):
                 loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
             outputs = (loss,) + outputs
 
-        return outputs  # (loss), logits, (hidden_states)', (attentions), (intermediates)
+        return outputs  # loss, logits, (sequence_output), (all attentions), (all attentions QQ), (all attentions KK), (all attentions VV), (all_intermediate)
 

@@ -285,7 +285,11 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                                 # teacher_logit: [32, 2]
                                 # len(teacher_reps) = 13; teacher_reps[0]: [32, 128, 768]
                                 # _, teacher_logit, teacher_reps, _, _ = teacher_model(**inputs)
-                                _, teacher_logit, teacher_reps, teacher_atts, _ = teacher_model(**inputs)
+                                # _, teacher_logit, teacher_reps, teacher_atts, _ = teacher_model(**inputs)
+
+                                # loss, logits, (sequence_output), (all attentions), (all attentions QQ), (all attentions KK), (all attentions VV), (all_intermediate)
+                                _, teacher_logit, teacher_reps, teacher_atts, teacher_atts_QQ, teacher_atts_KK, teacher_atts_VV, _ = teacher_model(**inputs)
+
                                 hidden_max_all.append(teacher_reps)
                                 logits_max_all.append(teacher_logit)
                                 atts_max_all.append(teacher_atts)
@@ -314,7 +318,8 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                         # stage 2: width- and depth- adaptive
                         if args.training_phase == 'dynabert':
                             if getattr(args, 'data_aug'):
-                                loss, student_logit, student_reps, student_atts, _ = model(**inputs_stu)
+                                # loss, student_logit, student_reps, student_atts, _ = model(**inputs_stu)
+                                loss, student_logit, student_reps, student_atts, student_atts_QQ, student_atts_KK, student_atts_VV, _ = model(**inputs_stu)
 
                                 # distillation loss of logits
                                 if args.output_mode == "classification":
@@ -343,12 +348,29 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                                 
                                 # last layer
                                 # student_att, teacher_att = student_atts[-1], atts_max_all[width_idx][kept_layers_index[-2]] # '-2'??? check it again
-                                student_att, teacher_att = student_atts[-1], teacher_atts[-1] 
-                                student_att = torch.where(student_att <= -1e2, torch.zeros_like(student_att).to(args.device),
-                                                student_att)
-                                teacher_att = torch.where(teacher_att <= -1e2, torch.zeros_like(teacher_att).to(args.device),
-                                                teacher_att)
-                                att_loss = loss_mse(torch.sum(student_att, dim=1), torch.sum(teacher_att.detach(), dim=1))
+
+                                # student_att, teacher_att = student_atts[-1], teacher_atts[-1] 
+                                # student_att = torch.where(student_att <= -1e2, torch.zeros_like(student_att).to(args.device),
+                                #                 student_att)
+                                # teacher_att = torch.where(teacher_att <= -1e2, torch.zeros_like(teacher_att).to(args.device),
+                                #                 teacher_att)
+                                # att_loss = loss_mse(torch.sum(student_att, dim=1), torch.sum(teacher_att.detach(), dim=1))
+
+
+                                student_att_QQ, teacher_att_QQ = student_atts_QQ[-1], teacher_atts_QQ[-1]
+                                student_att_QQ = torch.where(student_att_QQ <= -1e2, torch.zeros_like(student_att_QQ).to(args.device), student_att_QQ)
+                                teacher_att_QQ = torch.where(teacher_att_QQ <= -1e2, torch.zeros_like(teacher_att_QQ).to(args.device), teacher_att_QQ)
+                                
+                                student_att_KK, teacher_att_KK = student_atts_KK[-1], teacher_atts_KK[-1]
+                                student_att_KK = torch.where(student_att_KK <= -1e2, torch.zeros_like(student_att_KK).to(args.device), student_att_KK)
+                                teacher_att_KK = torch.where(teacher_att_KK <= -1e2, torch.zeros_like(teacher_att_KK).to(args.device), teacher_att_KK)
+
+                                student_att_VV, teacher_att_VV = student_atts_VV[-1], teacher_atts_VV[-1]
+                                student_att_VV = torch.where(student_att_VV <= -1e2, torch.zeros_like(student_att_VV).to(args.device), student_att_VV)
+                                teacher_att_VV = torch.where(teacher_att_VV <= -1e2, torch.zeros_like(teacher_att_VV).to(args.device), teacher_att_VV)
+
+                                att_loss = loss_mse(student_att_QQ, teacher_att_QQ.detach()) + loss_mse(student_att_KK, teacher_att_KK.detach()) + loss_mse(student_att_VV, teacher_att_VV.detach())
+
 
                                 # loss = args.depth_lambda1 * logit_loss + args.depth_lambda2 * rep_loss  # ground+truth and distillation
                                 # logit_loss could represent hard_loss ???
@@ -357,7 +379,8 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                                 # width_idx += 1  # move to the next width
 
                             else: 
-                                hard_loss, student_logit, student_reps, student_atts, _ = model(**inputs_stu)
+                                # hard_loss, student_logit, student_reps, student_atts, _ = model(**inputs_stu)
+                                hard_loss, student_logit, student_reps, student_atts, student_atts_QQ, student_atts_KK, student_atts_VV, _ = model(**inputs_stu)
 
                                 # print('')
                                 # print("Epoch_W {}, Epoch {}, Step {}, Local_rank {}, Sub {}, Student_reps {}".format(epoch_wholeset, epoch, step, args.local_rank, idx_sub, student_reps[2][0]))
@@ -381,6 +404,7 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                                 student_rep, teacher_rep = student_reps[-1], teacher_reps[-1]
                                 rep_loss = loss_mse(student_rep, teacher_rep.detach())
 
+
                                 ##  distillation loss of attention
                                 # att_loss = 0
                                 
@@ -388,12 +412,30 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                                 # student_att: [32, width_mult*12, 128, 128]
                                 # teacher_att: [32, 12, 128, 128]
                                 # student_att, teacher_att = student_atts[-1], atts_max_all[width_idx][kept_layers_index[-2]] # '-2'??? check it again
-                                student_att, teacher_att = student_atts[-1], teacher_atts[-1]
-                                student_att = torch.where(student_att <= -1e2, torch.zeros_like(student_att).to(args.device),
-                                                student_att)
-                                teacher_att = torch.where(teacher_att <= -1e2, torch.zeros_like(teacher_att).to(args.device),
-                                                teacher_att)
-                                att_loss = loss_mse(torch.sum(student_att, dim=1), torch.sum(teacher_att.detach(), dim=1))
+
+                                # student_att, teacher_att = student_atts[-1], teacher_atts[-1]
+                                # student_att = torch.where(student_att <= -1e2, torch.zeros_like(student_att).to(args.device),
+                                #                 student_att)
+                                # teacher_att = torch.where(teacher_att <= -1e2, torch.zeros_like(teacher_att).to(args.device),
+                                #                 teacher_att)
+                                # att_loss = loss_mse(torch.sum(student_att, dim=1), torch.sum(teacher_att.detach(), dim=1))
+
+
+                                student_att_QQ, teacher_att_QQ = student_atts_QQ[-1], teacher_atts_QQ[-1]
+                                student_att_QQ = torch.where(student_att_QQ <= -1e2, torch.zeros_like(student_att_QQ).to(args.device), student_att_QQ)
+                                teacher_att_QQ = torch.where(teacher_att_QQ <= -1e2, torch.zeros_like(teacher_att_QQ).to(args.device), teacher_att_QQ)
+                                
+                                student_att_KK, teacher_att_KK = student_atts_KK[-1], teacher_atts_KK[-1]
+                                student_att_KK = torch.where(student_att_KK <= -1e2, torch.zeros_like(student_att_KK).to(args.device), student_att_KK)
+                                teacher_att_KK = torch.where(teacher_att_KK <= -1e2, torch.zeros_like(teacher_att_KK).to(args.device), teacher_att_KK)
+
+                                student_att_VV, teacher_att_VV = student_atts_VV[-1], teacher_atts_VV[-1]
+                                student_att_VV = torch.where(student_att_VV <= -1e2, torch.zeros_like(student_att_VV).to(args.device), student_att_VV)
+                                teacher_att_VV = torch.where(teacher_att_VV <= -1e2, torch.zeros_like(teacher_att_VV).to(args.device), teacher_att_VV)
+
+                                att_loss = loss_mse(student_att_QQ, teacher_att_QQ.detach()) + loss_mse(student_att_KK, teacher_att_KK.detach()) + loss_mse(student_att_VV, teacher_att_VV.detach())
+
+
 
                                 # loss = args.depth_lambda1 * logit_loss + args.depth_lambda2 * rep_loss  # ground+truth and distillation
                                 # logit_loss could represent hard_loss ???
