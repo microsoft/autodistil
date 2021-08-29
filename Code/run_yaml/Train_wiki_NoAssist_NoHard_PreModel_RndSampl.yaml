@@ -36,13 +36,13 @@ code:
   local_dir: ../
 
 data:
-  local_dir:  ../../Data_and_Models
-  remote_dir: data_and_models
+  local_dir:  /home/subho/workspace/philly_data
+  remote_dir: wikidata
 
 storage:
   output:
-    storage_account_name: dongkuan
-    container_name: dynabert
+    storage_account_name: subho
+    container_name: phillytools
     # mount_dir: /mnt/dynabertw
 
 search:
@@ -54,10 +54,10 @@ search:
         --model_type bert
         --task_name {TASK_NAME}
         --do_train
-        --data_dir $$AMLT_DATA_DIR/Data_GLUE/glue_data/{TASK_NAME}/
-        --pregenerated_data $$AMLT_DATA_DIR/English_Wiki/corpus_jsonfile_for_general_KD/
-        --model_dir $$AMLT_DATA_DIR/Local_models/pretrained_BERTs/BERT_base_uncased/
-        --output_dir $$AMLT_OUTPUT_DIR/
+        --data_dir $$PT_DATA_DIR/Data_GLUE/glue_data/{TASK_NAME}/
+        --pregenerated_data $$PT_DATA_DIR/English_Wiki/corpus_jsonfile_for_general_KD/
+        --model_dir $$PT_DATA_DIR/Local_models/pretrained_BERTs/BERT_base_uncased/
+        --output_dir $$PT_OUTPUT_DIR/
         --max_seq_length {Max_Seq_Length}
         --learning_rate {LR}
         --per_gpu_train_batch_size {Per_GPU_Train_Batch_Size}
@@ -71,7 +71,7 @@ search:
         --depth_lambda3 {Depth_Lambda3}
         --depth_lambda4 {Depth_Lambda4}
         --training_phase {Training_Phase}
-        --output_cache_dir $$AMLT_OUTPUT_DIR/cache
+        --output_cache_dir $$PT_OUTPUT_DIR/cache
         --weight_decay {Weight_Decay}
         --num_train_epochs_wholeset {Num_Train_Epochs_WholeSet}
         --subs_num {Subs_Num}

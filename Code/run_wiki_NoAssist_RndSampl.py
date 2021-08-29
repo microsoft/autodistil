@@ -303,7 +303,7 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                             model = model.module if hasattr(model, 'module') else model
                             base_model = getattr(model, model.base_model_prefix, model)
                             n_layers = base_model.config.num_hidden_layers
-                            depth = round(subs_sampled[idx_sub][0] * n_layers)
+                            depth = int(round(subs_sampled[idx_sub][0] * n_layers))
                             kept_layers_index = []
                             for i in range(depth):
                                 kept_layers_index.append(math.floor(i / subs_sampled[idx_sub][0]))
