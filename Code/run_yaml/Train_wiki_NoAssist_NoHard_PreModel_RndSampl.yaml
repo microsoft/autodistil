@@ -75,8 +75,8 @@ search:
         --weight_decay {Weight_Decay}
         --num_train_epochs_wholeset {Num_Train_Epochs_WholeSet}
         --subs_num {Subs_Num}
-        # --start_size {Start_Size}
-        # --stop_size {Stop_Size}
+        --start_size {Start_Size}
+        --stop_size {Stop_Size}
   type: grid
   max_trials: 100
   # parallel_trials: 2 ???
