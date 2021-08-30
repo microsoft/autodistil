@@ -1,4 +1,4 @@
-description: NoAssist_wiki_NoHard_PreModel_RndSampl_SuperBase_GivenSubNum_AttLossWork
+description: NoAssist_wiki_NoHard_PreModel_RndSampl_Subnets_50_80M
 
 target:
   service: amlk8s
@@ -131,10 +131,10 @@ search:
       values: [50]
     - name: Subs_Num
       spec: discrete
-      values: [-1]
-    # - name: Start_Size
-    #   spec: discrete
-    #   values: [40000000.0]
-    # - name: Stop_Size
-    #   spec: discrete
-    #   values: [70000000.0]
+      values: [0]
+    - name: Start_Size
+      spec: discrete
+      values: [50000000.0]
+    - name: Stop_Size
+      spec: discrete
+      values: [80000000.0]
