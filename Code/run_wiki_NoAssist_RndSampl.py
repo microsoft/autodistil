@@ -1080,6 +1080,10 @@ def main():
     args.hidden_mult_list = list(np.linspace(hidden_tmp[0], hidden_tmp[1], num=int(hidden_tmp[2])))
     args.intermediate_mult_list = list(np.linspace(intermediate_tmp[0], intermediate_tmp[1], num=int(intermediate_tmp[2])))
     
+    args.width_mult_list = [float(width) for width in args.width_mult_list]
+    args.depth_mult_list = [float(depth) for depth in args.depth_mult_list]
+    args.hidden_mult_list = [float(hidden) for hidden in args.hidden_mult_list]
+    args.intermediate_mult_list = [float(intermediate) for intermediate in args.intermediate_mult_list]
 
     # added from TinyBERT (DK)
     samples_per_epoch = []
