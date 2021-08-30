@@ -128,10 +128,10 @@ search:
       values: [0.01]
     - name: Num_Train_Epochs_WholeSet
       spec: discrete
-      values: [10]
+      values: [50]
     - name: Subs_Num
       spec: discrete
-      values: [3200]
+      values: [-1]
     # - name: Start_Size
     #   spec: discrete
     #   values: [40000000.0]
