@@ -435,8 +435,6 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
 
                                 att_loss = loss_mse(student_att_QQ, teacher_att_QQ.detach()) + loss_mse(student_att_KK, teacher_att_KK.detach()) + loss_mse(student_att_VV, teacher_att_VV.detach())
 
-
-
                                 # loss = args.depth_lambda1 * logit_loss + args.depth_lambda2 * rep_loss  # ground+truth and distillation
                                 # logit_loss could represent hard_loss ???
                                 # loss = args.depth_lambda4 * hard_loss + args.depth_lambda1 * logit_loss + args.depth_lambda3 * att_loss
@@ -481,7 +479,7 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                             torch.distributed.all_reduce(copied_loss, op=torch.distributed.ReduceOp.SUM)
                             loss = copied_loss / torch.distributed.get_world_size()
 
-                            if global_step % 100 == 0:
+                            if global_step % 1000 == 0:
                                 print("After all_reduce - Epoch_W {}, Epoch {}, Step {}, Local_rank {}, Sub {}, Loss {}".format(epoch_wholeset, epoch, step, args.local_rank, idx_sub, loss))
                                 print('')
 
