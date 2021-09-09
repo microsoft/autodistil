@@ -80,6 +80,12 @@ def glue_convert_examples_to_features(examples, tokenizer,
         if is_tf_dataset:
             example = processor.get_example_from_tensor_dict(example)
 
+        if ex_index < 3:
+            print('')
+            print('ex_index: ', ex_index)
+            print('example: ', example)
+            print('')
+
         inputs = tokenizer.encode_plus(
             example.text_a,
             example.text_b,

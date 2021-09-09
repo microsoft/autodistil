@@ -716,13 +716,13 @@ def main():
     # model = model_class.from_pretrained(None, config=config, state_dict=s)
     # # print('model: ', model)
 
-    # if args.training_phase == 'dynabertw':
-    if args.training_phase == 'dynabertw' or args.training_phase == 'dynabert':
-        print('Network rewiring starts')
-        # rewire the network according to the importance of attention heads and neurons
-        head_importance, neuron_importance = compute_neuron_head_importance(args, model, tokenizer)
-        reorder_neuron_head(model, head_importance, neuron_importance)
-        print('Network rewiring done!')
+    # # if args.training_phase == 'dynabertw':
+    # if args.training_phase == 'dynabertw' or args.training_phase == 'dynabert':
+    #     print('Network rewiring starts')
+    #     # rewire the network according to the importance of attention heads and neurons
+    #     head_importance, neuron_importance = compute_neuron_head_importance(args, model, tokenizer)
+    #     reorder_neuron_head(model, head_importance, neuron_importance)
+    #     print('Network rewiring done!')
 
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
