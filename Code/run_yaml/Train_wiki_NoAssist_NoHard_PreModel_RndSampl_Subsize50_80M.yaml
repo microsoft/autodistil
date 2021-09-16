@@ -69,7 +69,6 @@ search:
         --depth_lambda1 {Depth_Lambda1}
         --depth_lambda2 {Depth_Lambda2}
         --depth_lambda3 {Depth_Lambda3}
-        # --depth_lambda4 {Depth_Lambda4}
         --training_phase {Training_Phase}
         --output_cache_dir $$PT_OUTPUT_DIR/cache
         --weight_decay {Weight_Decay}
@@ -118,9 +117,6 @@ search:
     - name: Depth_Lambda3
       spec: discrete
       values: [0.01]
-    # - name: Depth_Lambda4
-    #   spec: discrete
-    #   values: [0.0]
     - name: Training_Phase
       spec: discrete
       values: ['dynabert']
@@ -129,7 +125,7 @@ search:
       values: [0.01]
     - name: Num_Train_Epochs_WholeSet
       spec: discrete
-      values: [50]
+      values: [15]
     - name: Subs_Num
       spec: discrete
       values: [0]
