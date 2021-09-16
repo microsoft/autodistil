@@ -181,7 +181,7 @@ class DynaLinear_v1(nn.Linear):
         self.dyna_cate = dyna_cate
         self.hidden_mult = 1.
 
-        self.intermediate_mult = 1.
+        self.intermediate_mult = 4.
 
     def forward(self, input):
         if self.dyna_dim[0]:

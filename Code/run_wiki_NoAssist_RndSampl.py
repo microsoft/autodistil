@@ -277,37 +277,42 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                     # print('')
 
                     if args.training_phase == 'dynabert' and teacher_model:
-                        hidden_max_all, logits_max_all = [], []
-                        atts_max_all = []
-                        # for width_mult in sorted(args.width_mult_list, reverse=True):
-                        for hidden_mult in sorted(args.hidden_mult_list, reverse=True):
-                            with torch.no_grad():
-                                # teacher_logit: [32, 2]
-                                # len(teacher_reps) = 13; teacher_reps[0]: [32, 128, 768]
-                                # _, teacher_logit, teacher_reps, _, _ = teacher_model(**inputs)
-                                # _, teacher_logit, teacher_reps, teacher_atts, _ = teacher_model(**inputs)
+                        # hidden_max_all, logits_max_all = [], []
+                        # atts_max_all = []
+                        # # for width_mult in sorted(args.width_mult_list, reverse=True):
+                        # for hidden_mult in sorted(args.hidden_mult_list, reverse=True):
+                        #     with torch.no_grad():
+                        #         # teacher_logit: [32, 2]
+                        #         # len(teacher_reps) = 13; teacher_reps[0]: [32, 128, 768]
+                        #         # _, teacher_logit, teacher_reps, _, _ = teacher_model(**inputs)
+                        #         # _, teacher_logit, teacher_reps, teacher_atts, _ = teacher_model(**inputs)
 
-                                # loss, logits, (sequence_output), (all attentions), (all attentions QQ), (all attentions KK), (all attentions VV), (all_intermediate)
-                                _, teacher_logit, teacher_reps, teacher_atts, teacher_atts_QQ, teacher_atts_KK, teacher_atts_VV, _ = teacher_model(**inputs)
+                        #         # loss, logits, (sequence_output), (all attentions), (all attentions QQ), (all attentions KK), (all attentions VV), (all_intermediate)
+                        #         _, teacher_logit, teacher_reps, teacher_atts, teacher_atts_QQ, teacher_atts_KK, teacher_atts_VV, _ = teacher_model(**inputs)
 
-                                hidden_max_all.append(teacher_reps)
-                                logits_max_all.append(teacher_logit)
-                                atts_max_all.append(teacher_atts)
+                        #         hidden_max_all.append(teacher_reps)
+                        #         logits_max_all.append(teacher_logit)
+                        #         atts_max_all.append(teacher_atts)
+
+                        with torch.no_grad():
+                            # loss, logits, (sequence_output), (all attentions), (all attentions QQ), (all attentions KK), (all attentions VV), (all_intermediate)
+                            _, teacher_logit, teacher_reps, teacher_atts, teacher_atts_QQ, teacher_atts_KK, teacher_atts_VV, _ = teacher_model(**inputs)
 
                     # accumulate grads for all sampled sub-networks
                     for idx_sub in range(len(subs_sampled)):
                         # print('subs_sampled[idx_sub]: ', subs_sampled[idx_sub])
                         model.apply(lambda m: setattr(m, 'depth_mult', subs_sampled[idx_sub][0]))
                         
-                        if args.training_phase == 'dynabert' or 'final_finetuning':
-                            model = model.module if hasattr(model, 'module') else model
-                            base_model = getattr(model, model.base_model_prefix, model)
-                            n_layers = base_model.config.num_hidden_layers
-                            depth = int(round(subs_sampled[idx_sub][0] * n_layers))
-                            kept_layers_index = []
-                            for i in range(depth):
-                                kept_layers_index.append(math.floor(i / subs_sampled[idx_sub][0]))
-                            kept_layers_index.append(n_layers)
+                        # # layer mapping between student and teacher
+                        # if args.training_phase == 'dynabert' or 'final_finetuning':
+                        #     model = model.module if hasattr(model, 'module') else model
+                        #     base_model = getattr(model, model.base_model_prefix, model)
+                        #     n_layers = base_model.config.num_hidden_layers
+                        #     depth = int(round(subs_sampled[idx_sub][0] * n_layers))
+                        #     kept_layers_index = []
+                        #     for i in range(depth):
+                        #         kept_layers_index.append(math.floor(i / subs_sampled[idx_sub][0]))
+                        #     kept_layers_index.append(n_layers)
                         
                         model.apply(lambda m: setattr(m, 'width_mult', subs_sampled[idx_sub][1]))
                         model.apply(lambda m: setattr(m, 'hidden_mult', subs_sampled[idx_sub][2]))
@@ -438,16 +443,19 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                                 # loss = args.depth_lambda1 * logit_loss + args.depth_lambda2 * rep_loss  # ground+truth and distillation
                                 # logit_loss could represent hard_loss ???
                                 # loss = args.depth_lambda4 * hard_loss + args.depth_lambda1 * logit_loss + args.depth_lambda3 * att_loss
-                                loss = args.depth_lambda4 * hard_loss + args.depth_lambda1 * logit_loss + args.depth_lambda3 * att_loss + args.depth_lambda2 * rep_loss
+                                
+                                # loss = args.depth_lambda4 * hard_loss + args.depth_lambda1 * logit_loss + args.depth_lambda3 * att_loss + args.depth_lambda2 * rep_loss
+                                loss = args.depth_lambda1 * logit_loss + args.depth_lambda3 * att_loss + args.depth_lambda2 * rep_loss
+
                                 # width_idx += 1  # move to the next width
 
-                                # if (global_step + 1) % args.printloss_step == 0:
-                                #     print("------------Global_step {}----------".format(global_step))
-                                #     print("total loss", loss.item())
-                                #     print("hard_loss", hard_loss.item())
-                                #     print("logit_loss", logit_loss.item())
-                                #     print("att_loss", att_loss.item())
-                                #     print("rep_loss", rep_loss.item())
+                                if (global_step + 1) % args.printloss_step == 0 and args.local_rank in [-1, 0]:
+                                    print("------------Global_step {}----------".format(global_step))
+                                    print("total loss", loss.item())
+                                    print("hard_loss", hard_loss.item())
+                                    print("logit_loss", logit_loss.item())
+                                    print("att_loss", att_loss.item())
+                                    print("rep_loss", rep_loss.item())
 
                         # stage 3: final finetuning
                         else:
@@ -479,7 +487,7 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                             torch.distributed.all_reduce(copied_loss, op=torch.distributed.ReduceOp.SUM)
                             loss = copied_loss / torch.distributed.get_world_size()
 
-                            if global_step % 1000 == 0:
+                            if global_step % 2000 == 0:
                                 print("After all_reduce - Epoch_W {}, Epoch {}, Step {}, Local_rank {}, Sub {}, Loss {}".format(epoch_wholeset, epoch, step, args.local_rank, idx_sub, loss))
                                 print('')
 

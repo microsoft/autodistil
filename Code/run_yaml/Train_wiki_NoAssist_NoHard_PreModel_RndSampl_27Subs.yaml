@@ -1,4 +1,4 @@
-description: NoAssist_wiki_NoHard_PreModel_RndSampl_27Subs_on_wiki
+description: NoAssist_wiki_NoHard_PreModel_RndSampl_27Subs
 
 target:
   service: amlk8s
@@ -47,7 +47,7 @@ storage:
 
 search:
   job_template:
-    name: Epochs_{Num_Train_Epochs_WholeSet}_LR_{LR}
+    name: Epochs_{Num_Train_Epochs_WholeSet}
     sku: G16
     command:
       - python -m torch.distributed.launch --nproc_per_node=16 run_wiki_NoAssist_RndSampl.py
@@ -69,7 +69,7 @@ search:
         --depth_lambda1 {Depth_Lambda1}
         --depth_lambda2 {Depth_Lambda2}
         --depth_lambda3 {Depth_Lambda3}
-        --depth_lambda4 {Depth_Lambda4}
+        # --depth_lambda4 {Depth_Lambda4}
         --training_phase {Training_Phase}
         --output_cache_dir $$PT_OUTPUT_DIR/cache
         --weight_decay {Weight_Decay}
@@ -77,6 +77,7 @@ search:
         --subs_num {Subs_Num}
         # --start_size {Start_Size}
         # --stop_size {Stop_Size}
+        --printloss_step {Printloss_Step}
   type: grid
   max_trials: 100
   # parallel_trials: 2 ???
@@ -117,9 +118,9 @@ search:
     - name: Depth_Lambda3
       spec: discrete
       values: [0.01]
-    - name: Depth_Lambda4
-      spec: discrete
-      values: [0.0]
+    # - name: Depth_Lambda4
+    #   spec: discrete
+    #   values: [0.0]
     - name: Training_Phase
       spec: discrete
       values: ['dynabert']
@@ -138,3 +139,6 @@ search:
     # - name: Stop_Size
     #   spec: discrete
     #   values: [80000000.0]
+    - name: Printloss_Step
+      spec: discrete
+      values: [1000]
