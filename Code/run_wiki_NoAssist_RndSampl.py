@@ -137,10 +137,10 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
     if args.local_rank != -1:
         num_train_optimization_steps = num_train_optimization_steps // torch.distributed.get_world_size()
 
-    print("")
-    print("torch.distributed.get_world_size(): ", torch.distributed.get_world_size())
-    print("torch.cuda.device_count(): ", torch.cuda.device_count())
-    print("")
+    # print("")
+    # print("torch.distributed.get_world_size(): ", torch.distributed.get_world_size())
+    # print("torch.cuda.device_count(): ", torch.cuda.device_count())
+    # print("")
 
     # train_sampler = RandomSampler(train_dataset)
     # train_dataloader = DataLoader(train_dataset, sampler=train_sampler,

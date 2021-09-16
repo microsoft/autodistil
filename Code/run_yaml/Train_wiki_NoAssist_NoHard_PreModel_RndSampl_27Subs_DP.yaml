@@ -1,4 +1,4 @@
-description: NoAssist_wiki_PreModel_11232Subs
+description: NoAssist_wiki_PreModel_27Subs_DP
 
 target:
   service: amlk8s
@@ -48,9 +48,9 @@ storage:
 search:
   job_template:
     name: Epochs_{Num_Train_Epochs_WholeSet}
-    sku: G16
+    sku: G3
     command:
-      - python -m torch.distributed.launch --nproc_per_node=16 run_wiki_NoAssist_RndSampl.py
+      - python run_wiki_NoAssist_RndSampl.py
         --model_type bert
         --task_name {TASK_NAME}
         --do_train
@@ -93,22 +93,22 @@ search:
       values: [2e-5] # [1e-5, 2e-5, 4e-5, 8e-5, 16e-5]
     - name: Per_GPU_Train_Batch_Size
       spec: discrete
-      values: [96] # [64]
+      values: [32]
     - name: Num_Train_Epochs
       spec: discrete
       values: [3]
     - name: Depth_Mult_List
       spec: discrete
-      values: ['1/12,6/12,6']
+      values: ['3/12,6/12,3']
     - name: Width_Mult_List
       spec: discrete
-      values: ['1/12,12/12,12']
+      values: ['6/12,12/12,3']
     - name: Hidden_Mult_List
       spec: discrete
-      values: ['1/12,12/12,12']
+      values: ['3/12,12/12,3']
     - name: Intermediate_Mult_List
       spec: discrete
-      values: ['1.0,4.0,13']
+      values: ['4.0,4.0,1']
     - name: Depth_Lambda1
       spec: discrete
       values: [1.0]

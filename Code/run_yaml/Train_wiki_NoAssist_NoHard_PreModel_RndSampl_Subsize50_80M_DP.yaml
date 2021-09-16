@@ -1,4 +1,4 @@
-description: NoAssist_wiki_PreModel_11232Subs
+description: NoAssist_wiki_PreModel_Subsize_50_80M_DP
 
 target:
   service: amlk8s
@@ -48,9 +48,9 @@ storage:
 search:
   job_template:
     name: Epochs_{Num_Train_Epochs_WholeSet}
-    sku: G16
+    sku: G3
     command:
-      - python -m torch.distributed.launch --nproc_per_node=16 run_wiki_NoAssist_RndSampl.py
+      - python run_wiki_NoAssist_RndSampl.py
         --model_type bert
         --task_name {TASK_NAME}
         --do_train
@@ -75,8 +75,8 @@ search:
         --weight_decay {Weight_Decay}
         --num_train_epochs_wholeset {Num_Train_Epochs_WholeSet}
         --subs_num {Subs_Num}
-        # --start_size {Start_Size}
-        # --stop_size {Stop_Size}
+        --start_size {Start_Size}
+        --stop_size {Stop_Size}
         --printloss_step {Printloss_Step}
   type: grid
   max_trials: 100
@@ -93,7 +93,7 @@ search:
       values: [2e-5] # [1e-5, 2e-5, 4e-5, 8e-5, 16e-5]
     - name: Per_GPU_Train_Batch_Size
       spec: discrete
-      values: [96] # [64]
+      values: [32]
     - name: Num_Train_Epochs
       spec: discrete
       values: [3]
@@ -132,13 +132,13 @@ search:
       values: [50]
     - name: Subs_Num
       spec: discrete
-      values: [-1]
-    # - name: Start_Size
-    #   spec: discrete
-    #   values: [50000000.0]
-    # - name: Stop_Size
-    #   spec: discrete
-    #   values: [80000000.0]
+      values: [0]
+    - name: Start_Size
+      spec: discrete
+      values: [50000000.0]
+    - name: Stop_Size
+      spec: discrete
+      values: [80000000.0]
     - name: Printloss_Step
       spec: discrete
       values: [1000]
