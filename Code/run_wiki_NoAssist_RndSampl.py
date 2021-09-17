@@ -452,7 +452,7 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                                 if (global_step + 1) % args.printloss_step == 0 and args.local_rank in [-1, 0]:
                                     print("------------Global_step {}----------".format(global_step))
                                     print("total loss", loss.item())
-                                    print("hard_loss", hard_loss.item())
+                                    # print("hard_loss", hard_loss.item())
                                     print("logit_loss", logit_loss.item())
                                     print("att_loss", att_loss.item())
                                     print("rep_loss", rep_loss.item())
