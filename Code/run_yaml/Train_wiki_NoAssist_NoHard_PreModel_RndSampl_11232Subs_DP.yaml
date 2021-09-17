@@ -48,7 +48,7 @@ storage:
 search:
   job_template:
     name: Epochs_{Num_Train_Epochs_WholeSet}
-    sku: G3
+    sku: G4
     command:
       - python run_wiki_NoAssist_RndSampl.py
         --model_type bert
@@ -87,7 +87,7 @@ search:
       values: [128]
     - name: LR
       spec: discrete
-      values: [2e-5] # [1e-5, 2e-5, 4e-5, 8e-5, 16e-5]
+      values: [4e-5] # [1e-5, 2e-5, 4e-5, 8e-5, 16e-5]
     - name: Per_GPU_Train_Batch_Size
       spec: discrete
       values: [32]
