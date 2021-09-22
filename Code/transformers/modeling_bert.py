@@ -931,8 +931,8 @@ class BertEncoder_v1(nn.Module):
 
         # (0,2,4,6,8,10) --> (0,1,2,3,4,5)
         for i in range(depth):
-            # kept_layers_index.append(math.floor(i/self.depth_mult))
-            kept_layers_index.append(math.floor(i))
+            kept_layers_index.append(math.floor(i/self.depth_mult))
+            # kept_layers_index.append(math.floor(i))
 
         for i in kept_layers_index:
             layer_module = self.layer[i]
