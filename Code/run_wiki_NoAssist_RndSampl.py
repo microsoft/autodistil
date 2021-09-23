@@ -219,6 +219,9 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                 train_sampler = DistributedSampler(epoch_dataset)
             train_dataloader = DataLoader(epoch_dataset, sampler=train_sampler, batch_size=args.train_batch_size)
 
+            if args.local_rank != -1:
+                train_dataloader.sampler.set_epoch(epoch_wholeset)
+
             tr_loss    = 0.0
             # hard_loss  = 0.0
             # logit_loss = 0.0
