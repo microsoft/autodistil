@@ -1,4 +1,4 @@
-description: NoAssist_wiki_PreModel_27Subs_DDP_vs_DP_16GPUs
+description: NoAssist_wiki_PreModel_27Subs_DDP_vs_DP_4GPUs
 
 target:
   service: amlk8s
