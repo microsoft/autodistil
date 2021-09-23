@@ -48,9 +48,9 @@ storage:
 search:
   job_template:
     name: Epochs_{Num_Train_Epochs_WholeSet}
-    sku: G16
+    sku: G4
     command:
-      - python -m torch.distributed.launch --nproc_per_node=16 run_wiki_NoAssist_RndSampl.py
+      - python -m torch.distributed.launch --nproc_per_node=4 run_wiki_NoAssist_RndSampl.py
         --model_type bert
         --task_name {TASK_NAME}
         --do_train
