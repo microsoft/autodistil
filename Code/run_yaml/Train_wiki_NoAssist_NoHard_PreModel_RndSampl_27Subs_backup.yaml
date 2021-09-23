@@ -1,4 +1,4 @@
-description: Wiki_PreModel_Subsize_50_80M_OnlyAttLoss_ShuffleIssueFixed
+description: NoAssist_wiki_PreModel_27Subs
 
 target:
   service: amlk8s
@@ -74,8 +74,6 @@ search:
         --weight_decay {Weight_Decay}
         --num_train_epochs_wholeset {Num_Train_Epochs_WholeSet}
         --subs_num {Subs_Num}
-        --start_size {Start_Size}
-        --stop_size {Stop_Size}
         --printloss_step {Printloss_Step}
   type: grid
   max_trials: 100
@@ -89,7 +87,7 @@ search:
       values: [128]
     - name: LR
       spec: discrete
-      values: [4e-5] # [1e-5, 2e-5, 4e-5, 8e-5, 16e-5]
+      values: [2e-5] # [1e-5, 2e-5, 4e-5, 8e-5, 16e-5]
     - name: Per_GPU_Train_Batch_Size
       spec: discrete
       values: [96] # [64]
@@ -98,25 +96,25 @@ search:
       values: [3]
     - name: Depth_Mult_List
       spec: discrete
-      values: ['1/12,6/12,6']
+      values: ['3/12,6/12,3']
     - name: Width_Mult_List
       spec: discrete
-      values: ['1/12,12/12,12']
+      values: ['6/12,12/12,3']
     - name: Hidden_Mult_List
       spec: discrete
-      values: ['1/12,12/12,12']
+      values: ['3/12,12/12,3']
     - name: Intermediate_Mult_List
       spec: discrete
-      values: ['1.0,4.0,13']
+      values: ['4.0,4.0,1']
     - name: Depth_Lambda1
       spec: discrete
-      values: [0.0]
+      values: [1.0]
     - name: Depth_Lambda2
       spec: discrete
-      values: [0.0]
+      values: [10.0]
     - name: Depth_Lambda3
       spec: discrete
-      values: [1.0]
+      values: [0.01]
     - name: Training_Phase
       spec: discrete
       values: ['dynabert']
@@ -128,13 +126,7 @@ search:
       values: [15]
     - name: Subs_Num
       spec: discrete
-      values: [0]
-    - name: Start_Size
-      spec: discrete
-      values: [50000000.0]
-    - name: Stop_Size
-      spec: discrete
-      values: [80000000.0]
+      values: [-1]
     - name: Printloss_Step
       spec: discrete
       values: [1000]

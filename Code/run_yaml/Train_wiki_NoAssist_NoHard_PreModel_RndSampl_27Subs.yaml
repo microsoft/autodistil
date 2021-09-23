@@ -1,4 +1,4 @@
-description: NoAssist_wiki_PreModel_27Subs
+description: NoAssist_wiki_PreModel_27Subs_OnlyAttLoss_ShuffleIssueFixed
 
 target:
   service: amlk8s
@@ -87,7 +87,7 @@ search:
       values: [128]
     - name: LR
       spec: discrete
-      values: [2e-5] # [1e-5, 2e-5, 4e-5, 8e-5, 16e-5]
+      values: [4e-5] # [1e-5, 2e-5, 4e-5, 8e-5, 16e-5]
     - name: Per_GPU_Train_Batch_Size
       spec: discrete
       values: [96] # [64]
@@ -108,13 +108,13 @@ search:
       values: ['4.0,4.0,1']
     - name: Depth_Lambda1
       spec: discrete
-      values: [1.0]
+      values: [0.0]
     - name: Depth_Lambda2
       spec: discrete
-      values: [10.0]
+      values: [0.0]
     - name: Depth_Lambda3
       spec: discrete
-      values: [0.01]
+      values: [1.0]
     - name: Training_Phase
       spec: discrete
       values: ['dynabert']

@@ -1,4 +1,4 @@
-description: Wiki_PreModel_Subsize_50_80M_OnlyAttLoss_ShuffleIssueFixed
+description: NoAssist_wiki_PreModel_Subsize_50_80M
 
 target:
   service: amlk8s
@@ -89,7 +89,7 @@ search:
       values: [128]
     - name: LR
       spec: discrete
-      values: [4e-5] # [1e-5, 2e-5, 4e-5, 8e-5, 16e-5]
+      values: [2e-5] # [1e-5, 2e-5, 4e-5, 8e-5, 16e-5]
     - name: Per_GPU_Train_Batch_Size
       spec: discrete
       values: [96] # [64]
@@ -110,13 +110,13 @@ search:
       values: ['1.0,4.0,13']
     - name: Depth_Lambda1
       spec: discrete
-      values: [0.0]
+      values: [1.0]
     - name: Depth_Lambda2
       spec: discrete
-      values: [0.0]
+      values: [10.0]
     - name: Depth_Lambda3
       spec: discrete
-      values: [1.0]
+      values: [0.01]
     - name: Training_Phase
       spec: discrete
       values: ['dynabert']
