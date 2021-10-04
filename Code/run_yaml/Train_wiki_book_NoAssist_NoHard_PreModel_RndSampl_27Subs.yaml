@@ -1,0 +1,132 @@
+description: NoAssist_wiki_plus_book_PreModel_27Subs_OnlyAttLoss_ShuffleIssueFixed
+
+target:
+  service: amlk8s
+  # run "amlt target list amlk8s" to list the names of available AMLK8s targets
+  name: itphyperdgx2cl1
+  vc: hai3
+
+# target:
+#   service: amlk8s
+#   # run "amlt target list amlk8s" to list the names of available AMLK8s targets
+#   name: itplabrr1cl1
+#   vc: resrchvc
+
+# target:
+#   service: amlk8s
+#   # run "amlt target list amlk8s" to list the names of available AMLK8s targets
+#   name: itpeastusv100cl2
+#   vc: resrchvc
+
+environment:
+  image: pytorch/pytorch:1.4-cuda10.1-cudnn7-devel # pytorch/pytorch:1.0.1-cuda10.0-cudnn7-devel, 1.4-cuda10.1-cudnn7-devel, 1.6.0-cuda10.1-cudnn7-devel
+  setup:
+    - pip install -r requirements.txt
+    - pip install --user boto3
+    - pip install --user regex
+    - pip install --user sklearn
+    - pip install --user tensorflow-gpu==2.3.1
+    # - git clone https://github.com/NVIDIA/apex
+    # - cd apex
+    # - pip install -v --disable-pip-version-check --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./
+
+code:
+  # local directory of the code. this will be uploaded to the server.
+  # $CONFIG_DIR is expanded to the directory of this config file
+  local_dir: ../
+
+data:
+  local_dir:  /home/subho/workspace/philly_data
+  remote_dir: wikidata
+
+storage:
+  output:
+    storage_account_name: subho
+    container_name: phillytools
+    # mount_dir: /mnt/dynabertw
+
+search:
+  job_template:
+    name: Epochs_{Num_Train_Epochs_WholeSet}
+    sku: G16
+    command:
+      - python -m torch.distributed.launch --nproc_per_node=16 run_wiki_plus_book_NoAssist_RndSampl.py
+        --model_type bert
+        --task_name {TASK_NAME}
+        --do_train
+        --data_dir $$PT_DATA_DIR/Data_GLUE/glue_data/{TASK_NAME}/
+        --pregenerated_data $$PT_DATA_DIR/English_Wiki/corpus_jsonfile_for_general_KD/
+        --model_dir $$PT_DATA_DIR/Local_models/pretrained_BERTs/BERT_base_uncased/
+        --output_dir $$PT_OUTPUT_DIR/
+        --max_seq_length {Max_Seq_Length}
+        --learning_rate {LR}
+        --per_gpu_train_batch_size {Per_GPU_Train_Batch_Size}
+        --num_train_epochs {Num_Train_Epochs}
+        --hidden_mult_list {Hidden_Mult_List}
+        --depth_mult_list {Depth_Mult_List}
+        --width_mult_list {Width_Mult_List}
+        --intermediate_mult_list {Intermediate_Mult_List}
+        --depth_lambda1 {Depth_Lambda1}
+        --depth_lambda2 {Depth_Lambda2}
+        --depth_lambda3 {Depth_Lambda3}
+        --training_phase {Training_Phase}
+        --output_cache_dir $$PT_OUTPUT_DIR/cache
+        --weight_decay {Weight_Decay}
+        --num_train_epochs_wholeset {Num_Train_Epochs_WholeSet}
+        --subs_num {Subs_Num}
+        --printloss_step {Printloss_Step}
+  type: grid
+  max_trials: 100
+  # parallel_trials: 2 ???
+  params:
+    - name: TASK_NAME
+      spec: discrete
+      values: ['MRPC']
+    - name: Max_Seq_Length
+      spec: discrete
+      values: [128]
+    - name: LR
+      spec: discrete
+      values: [4e-5] # [1e-5, 2e-5, 4e-5, 8e-5, 16e-5]
+    - name: Per_GPU_Train_Batch_Size
+      spec: discrete
+      values: [96] # [64]
+    - name: Num_Train_Epochs
+      spec: discrete
+      values: [4]
+    - name: Depth_Mult_List
+      spec: discrete
+      values: ['3/12,6/12,3']
+    - name: Width_Mult_List
+      spec: discrete
+      values: ['6/12,12/12,3']
+    - name: Hidden_Mult_List
+      spec: discrete
+      values: ['3/12,12/12,3']
+    - name: Intermediate_Mult_List
+      spec: discrete
+      values: ['4.0,4.0,1']
+    - name: Depth_Lambda1
+      spec: discrete
+      values: [0.0]
+    - name: Depth_Lambda2
+      spec: discrete
+      values: [0.0]
+    - name: Depth_Lambda3
+      spec: discrete
+      values: [1.0]
+    - name: Training_Phase
+      spec: discrete
+      values: ['dynabert']
+    - name: Weight_Decay
+      spec: discrete
+      values: [0.01]
+    - name: Num_Train_Epochs_WholeSet
+      spec: discrete
+      values: [15]
+    - name: Subs_Num
+      spec: discrete
+      values: [-1]
+    - name: Printloss_Step
+      spec: discrete
+      values: [1000]
