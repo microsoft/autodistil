@@ -171,17 +171,19 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
     num_sub_parts = 4
     step_files = int(num_files / num_sub_parts) # int(num_files / args.num_train_epochs)
 
-    total_train_examples = 0
-    # for epoch in np.arange(args.num_train_epochs):
-    for epoch in np.arange(num_sub_parts):
-        print("****** Sub data No. = {}".format(epoch))
-        data_file_list = files[int(epoch * step_files) : int((epoch+1) * step_files)]
-        epoch_dataset = pretraining_dataset(data_file_list, args.max_predictions_per_seq)
-        total_train_examples += len(epoch_dataset)
+    # total_train_examples = 0
+    # # for epoch in np.arange(args.num_train_epochs):
+    # for epoch in np.arange(num_sub_parts):
+    #     print("****** Sub data No. = {}".format(epoch))
+    #     data_file_list = files[int(epoch * step_files) : int((epoch+1) * step_files)]
+    #     epoch_dataset = pretraining_dataset(data_file_list, args.max_predictions_per_seq)
+    #     total_train_examples += len(epoch_dataset)
     
-    print("")
-    print("total_train_examples: ", total_train_examples)
-    print("")
+    # print("")
+    # print("total_train_examples: ", total_train_examples)
+    # print("")
+
+    total_train_examples = 203715344 # for wiki+book
 
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     
