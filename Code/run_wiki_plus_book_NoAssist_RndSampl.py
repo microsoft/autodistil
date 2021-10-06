@@ -984,8 +984,8 @@ class PregeneratedDataset(Dataset):
             # for i, line in enumerate(tqdm(f, total=num_samples, desc="Training examples")):
             for i, line in enumerate(tqdm(f, total=num_samples, desc="Local_rank {}, Training examples".format(args.local_rank))):
                 
-                if i == 100:
-                    break
+                # if i == 100:
+                #     break
                 if i % 100000 == 0:
                     print("")
                     # print("local_rank, line i: ", args.local_rank, i)

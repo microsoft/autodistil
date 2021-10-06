@@ -1,4 +1,4 @@
-description: NoAssist_wiki_plus_book_PreModel_11232Subs_OnlyAttLoss_ShuffleIssueFixed
+description: NoAssist_wiki_plus_book_seqlen128_PreModel_11232Subs_OnlyAttLoss_ShuffleIssueFixed
 
 target:
   service: amlk8s
@@ -37,7 +37,7 @@ code:
 
 data:
   local_dir:  /home/subho/workspace/philly_data
-  remote_dir: wikidata
+  remote_dir: wikibookdata
 
 storage:
   output:
@@ -55,7 +55,7 @@ search:
         --task_name {TASK_NAME}
         --do_train
         --data_dir $$PT_DATA_DIR/Data_GLUE/glue_data/{TASK_NAME}/
-        --pregenerated_data $$PT_DATA_DIR/English_Wiki/corpus_jsonfile_for_general_KD/
+        --pregenerated_data $$PT_DATA_DIR/English_Wiki_Book/corpus_jsonfile_for_general_KD_128/
         --model_dir $$PT_DATA_DIR/Local_models/pretrained_BERTs/BERT_base_uncased/
         --output_dir $$PT_OUTPUT_DIR/
         --max_seq_length {Max_Seq_Length}
