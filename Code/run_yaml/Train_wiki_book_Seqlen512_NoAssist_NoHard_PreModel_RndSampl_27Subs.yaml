@@ -91,7 +91,7 @@ search:
       values: [4e-5] # [1e-5, 2e-5, 4e-5, 8e-5, 16e-5]
     - name: Per_GPU_Train_Batch_Size
       spec: discrete
-      values: [64] # [32]
+      values: [96] # [32]
     - name: Num_Train_Epochs
       spec: discrete
       values: [8] # 4
