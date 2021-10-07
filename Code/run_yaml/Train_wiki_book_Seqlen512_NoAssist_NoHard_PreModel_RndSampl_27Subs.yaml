@@ -70,7 +70,6 @@ search:
         --depth_lambda2 {Depth_Lambda2}
         --depth_lambda3 {Depth_Lambda3}
         --training_phase {Training_Phase}
-        --output_cache_dir $$PT_OUTPUT_DIR/cache
         --weight_decay {Weight_Decay}
         --num_train_epochs_wholeset {Num_Train_Epochs_WholeSet}
         --subs_num {Subs_Num}
