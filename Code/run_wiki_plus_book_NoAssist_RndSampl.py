@@ -185,7 +185,10 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
 
     # total_train_examples = 203715344 for seq_len_128 of wiki+book
     # total_train_examples = 87242143 for seq_len_256 of wiki+book
-    total_train_examples = 203715344
+    if args.max_seq_length == 128:
+        total_train_examples = 203715344
+    else:
+        total_train_examples = 87242143
 
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     

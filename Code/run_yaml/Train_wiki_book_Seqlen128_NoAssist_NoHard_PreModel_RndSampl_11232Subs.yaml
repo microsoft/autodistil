@@ -55,7 +55,7 @@ search:
         --task_name {TASK_NAME}
         --do_train
         --data_dir $$PT_DATA_DIR/Data_GLUE/glue_data/{TASK_NAME}/
-        --pregenerated_data $$PT_DATA_DIR/English_Wiki_Book/corpus_jsonfile_for_general_KD_128/
+        --pregenerated_data $$PT_DATA_DIR/English_Wiki_Book/Seq_len_128/
         --model_dir $$PT_DATA_DIR/Local_models/pretrained_BERTs/BERT_base_uncased/
         --output_dir $$PT_OUTPUT_DIR/
         --max_seq_length {Max_Seq_Length}
@@ -75,6 +75,7 @@ search:
         --num_train_epochs_wholeset {Num_Train_Epochs_WholeSet}
         --subs_num {Subs_Num}
         --printloss_step {Printloss_Step}
+        --max_predictions_per_seq {Max_Predictions_Per_Seq}
   type: grid
   max_trials: 100
   # parallel_trials: 2 ???
@@ -130,3 +131,6 @@ search:
     - name: Printloss_Step
       spec: discrete
       values: [1000]
+    - name: Max_Predictions_Per_Seq
+      spec: discrete
+      values: [20]

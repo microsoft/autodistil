@@ -1,4 +1,4 @@
-description: NoAssist_wiki_plus_book_seqlen128_PreModel_27Subs_OnlyAttLoss_ShuffleIssueFixed
+description: NoAssist_wiki_plus_book_seqlen512_PreModel_11232Subs_OnlyAttLoss_ShuffleIssueFixed
 
 target:
   service: amlk8s
@@ -55,7 +55,7 @@ search:
         --task_name {TASK_NAME}
         --do_train
         --data_dir $$PT_DATA_DIR/Data_GLUE/glue_data/{TASK_NAME}/
-        --pregenerated_data $$PT_DATA_DIR/English_Wiki_Book/Seq_len_128/
+        --pregenerated_data $$PT_DATA_DIR/English_Wiki_Book/Seq_len_512/
         --model_dir $$PT_DATA_DIR/Local_models/pretrained_BERTs/BERT_base_uncased/
         --output_dir $$PT_OUTPUT_DIR/
         --max_seq_length {Max_Seq_Length}
@@ -85,28 +85,28 @@ search:
       values: ['MRPC']
     - name: Max_Seq_Length
       spec: discrete
-      values: [128]
+      values: [512]
     - name: LR
       spec: discrete
       values: [4e-5] # [1e-5, 2e-5, 4e-5, 8e-5, 16e-5]
     - name: Per_GPU_Train_Batch_Size
       spec: discrete
-      values: [96] # [64]
+      values: [32] # [96]
     - name: Num_Train_Epochs
       spec: discrete
       values: [4]
     - name: Depth_Mult_List
       spec: discrete
-      values: ['3/12,6/12,3']
+      values: ['1/12,6/12,6']
     - name: Width_Mult_List
       spec: discrete
-      values: ['6/12,12/12,3']
+      values: ['1/12,12/12,12']
     - name: Hidden_Mult_List
       spec: discrete
-      values: ['3/12,12/12,3']
+      values: ['1/12,12/12,12']
     - name: Intermediate_Mult_List
       spec: discrete
-      values: ['4.0,4.0,1']
+      values: ['1.0,4.0,13']
     - name: Depth_Lambda1
       spec: discrete
       values: [0.0]
@@ -130,7 +130,7 @@ search:
       values: [-1]
     - name: Printloss_Step
       spec: discrete
-      values: [1000]
+      values: [500]
     - name: Max_Predictions_Per_Seq
       spec: discrete
-      values: [20]
+      values: [80]
