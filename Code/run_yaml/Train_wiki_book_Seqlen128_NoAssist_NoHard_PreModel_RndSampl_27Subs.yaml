@@ -1,4 +1,4 @@
-description: NoAssist_wiki_plus_book_seqlen128_PreModel_27Subs_OnlyAttLoss_ShuffleIssueFixed
+description: NoAssist_wiki_plus_book_seqlen128_PreModel_27Subs_OnlyAttLoss_ShuffleIssueFixed_StepSaved
 
 target:
   service: amlk8s
@@ -75,6 +75,7 @@ search:
         --subs_num {Subs_Num}
         --printloss_step {Printloss_Step}
         --max_predictions_per_seq {Max_Predictions_Per_Seq}
+        --save_checkpoint_steps {Save_Checkpoint_Steps}
   type: grid
   max_trials: 100
   # parallel_trials: 2 ???
@@ -90,10 +91,10 @@ search:
       values: [4e-5] # [1e-5, 2e-5, 4e-5, 8e-5, 16e-5]
     - name: Per_GPU_Train_Batch_Size
       spec: discrete
-      values: [96] # [64]
+      values: [160] # [96]
     - name: Num_Train_Epochs
       spec: discrete
-      values: [4]
+      values: [8] # 4
     - name: Depth_Mult_List
       spec: discrete
       values: ['3/12,6/12,3']
@@ -133,3 +134,6 @@ search:
     - name: Max_Predictions_Per_Seq
       spec: discrete
       values: [20]
+    - name: Save_Checkpoint_Steps
+      spec: discrete
+      values: [10000]

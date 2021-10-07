@@ -591,7 +591,7 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                             torch.distributed.all_reduce(copied_loss, op=torch.distributed.ReduceOp.SUM)
                             loss = copied_loss / torch.distributed.get_world_size()
 
-                            if global_step % 100 == 0:
+                            if global_step % 500 == 0:
                                 print("After all_reduce - Epoch_W {}, Epoch {}, Step {}, Local_rank {}, Sub {}, Loss {}".format(epoch_wholeset, epoch, step, args.local_rank, idx_sub, loss))
                                 print('')
 
@@ -622,6 +622,28 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                         #     torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))
                         #     model_to_save.config.to_json_file(os.path.join(args.output_dir, CONFIG_NAME))
                         #     tokenizer.save_vocabulary(args.output_dir)
+
+                        # save
+                        if args.local_rank in [-1, 0] and global_step > 0 and args.save_checkpoint_steps > 0 and global_step % args.save_checkpoint_steps == 0:
+                            print('')
+                            print("Saving via GPU (local_rank) = {}".format(args.local_rank))
+                            print('')
+
+                            if not os.path.exists(os.path.join(args.output_dir, "global_step_{}/".format(global_step))):
+                                os.makedirs(os.path.join(args.output_dir, "global_step_{}/".format(global_step)))
+
+                            model_name = "global_step_{}/{}".format(global_step, WEIGHTS_NAME)
+                            config_name = "global_step_{}/{}".format(global_step, CONFIG_NAME)
+
+                            logging.info("** ** * Saving fine-tuned model ** ** * ")
+                            model_to_save = model.module if hasattr(model, 'module') else model
+                            output_model_file = os.path.join(args.output_dir, model_name)
+                            output_config_file = os.path.join(args.output_dir, config_name)
+                            torch.save(model_to_save.state_dict(), output_model_file)
+                            model_to_save.config.to_json_file(output_config_file)
+
+                            tokenizer.save_vocabulary(os.path.join(args.output_dir, "global_step_{}/".format(global_step)))
+                            torch.save(args, os.path.join(args.output_dir, "global_step_{}/".format(global_step), 'training_args.bin'))
 
 
                         # # evaluate
@@ -1178,6 +1200,8 @@ def main():
 
     parser.add_argument("--max_predictions_per_seq", default=20, type=int,
                         help="The maximum total of masked tokens per input sequence for Masked LM.")
+    parser.add_argument("--save_checkpoint_steps", default=10000, type=int,
+                        help="Every steps to save checkpoints.")
 
     args = parser.parse_args()
 
