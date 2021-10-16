@@ -1,4 +1,4 @@
-description: NoAssist_wiki_plus_book_seqlen128_PreModel_27Subs_OnlyAttLoss_ShuffleIssueFixed_StepSaved
+description: Pretrain_wiki_plus_book_seqlen128_fullsupernet
 
 target:
   service: amlk8s
@@ -50,7 +50,7 @@ search:
     name: Epochs_{Num_Train_Epochs_WholeSet}
     sku: G16
     command:
-      - python -m torch.distributed.launch --nproc_per_node=16 run_wiki_plus_book_NoAssist_RndSampl.py
+      - python -m torch.distributed.launch --nproc_per_node=16 run_pretrain_wiki_plus_book.py
         --model_type bert
         --task_name {TASK_NAME}
         --do_train
@@ -62,17 +62,9 @@ search:
         --learning_rate {LR}
         --per_gpu_train_batch_size {Per_GPU_Train_Batch_Size}
         --num_train_epochs {Num_Train_Epochs}
-        --hidden_mult_list {Hidden_Mult_List}
-        --depth_mult_list {Depth_Mult_List}
-        --width_mult_list {Width_Mult_List}
-        --intermediate_mult_list {Intermediate_Mult_List}
-        --depth_lambda1 {Depth_Lambda1}
-        --depth_lambda2 {Depth_Lambda2}
-        --depth_lambda3 {Depth_Lambda3}
         --training_phase {Training_Phase}
         --weight_decay {Weight_Decay}
         --num_train_epochs_wholeset {Num_Train_Epochs_WholeSet}
-        --subs_num {Subs_Num}
         --printloss_step {Printloss_Step}
         --max_predictions_per_seq {Max_Predictions_Per_Seq}
         --save_checkpoint_steps {Save_Checkpoint_Steps}
@@ -95,39 +87,15 @@ search:
     - name: Num_Train_Epochs
       spec: discrete
       values: [8] # 4
-    - name: Depth_Mult_List
-      spec: discrete
-      values: ['3/12,6/12,3']
-    - name: Width_Mult_List
-      spec: discrete
-      values: ['6/12,12/12,3']
-    - name: Hidden_Mult_List
-      spec: discrete
-      values: ['3/12,12/12,3']
-    - name: Intermediate_Mult_List
-      spec: discrete
-      values: ['4.0,4.0,1']
-    - name: Depth_Lambda1
-      spec: discrete
-      values: [0.0]
-    - name: Depth_Lambda2
-      spec: discrete
-      values: [0.0]
-    - name: Depth_Lambda3
-      spec: discrete
-      values: [1.0]
     - name: Training_Phase
       spec: discrete
-      values: ['dynabert']
+      values: ['pretrain']
     - name: Weight_Decay
       spec: discrete
       values: [0.01]
     - name: Num_Train_Epochs_WholeSet
       spec: discrete
       values: [15]
-    - name: Subs_Num
-      spec: discrete
-      values: [-1]
     - name: Printloss_Step
       spec: discrete
       values: [1000]

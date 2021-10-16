@@ -71,6 +71,8 @@ if is_torch_available():
                                 BertForSequenceClassification, BertForSequenceClassification_v1, BertForSequenceClassification_v1_AddHidLoss,
                                 load_tf_weights_in_bert, BERT_PRETRAINED_MODEL_ARCHIVE_MAP)
 
+    from .modeling_bert_v211 import (BertForPreTraining)
+
     # from .modeling_bert import (BertPreTrainedModel, BertModel, BertForPreTraining,
     #                             BertForMaskedLM, BertForNextSentencePrediction,
     #                             BertForSequenceClassification, BertForMultipleChoice,
