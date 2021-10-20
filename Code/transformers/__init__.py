@@ -73,6 +73,10 @@ if is_torch_available():
 
     from .modeling_bert_v211 import (BertForPreTraining)
 
+    from .modeling_bert_v211_OneNas_Pretrain_NoPrimer import (BertForPreTraining_v1)
+
+    from .modeling_bert_v211_OneNas_Pretrain_Primer import (BertForPreTraining_v1_Primer)
+
     # from .modeling_bert import (BertPreTrainedModel, BertModel, BertForPreTraining,
     #                             BertForMaskedLM, BertForNextSentencePrediction,
     #                             BertForSequenceClassification, BertForMultipleChoice,
