@@ -35,7 +35,7 @@ from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
 from torch.nn import  MSELoss
 
-from transformers import (BertConfig, BertForSequenceClassification, BertForSequenceClassification_v1_AddHidLoss, BertForPreTraining, BertForPreTraining_v1, BertTokenizer,
+from transformers import (BertConfig, BertForSequenceClassification, BertForSequenceClassification_v1, BertForSequenceClassification_v1_AddHidLoss, BertTokenizer,
                                   RobertaConfig,
                                   RobertaForSequenceClassification,
                                   RobertaTokenizer)
@@ -68,7 +68,7 @@ ALL_MODELS = sum((tuple(conf.pretrained_config_archive_map.keys()) for conf in (
 MODEL_CLASSES = {
     # 'bert': (BertConfig, BertForSequenceClassification, BertTokenizer),
     # 'bert': (BertConfig, BertForSequenceClassification_v1, BertTokenizer),
-    'bert': (BertConfig, BertForPreTraining_v1, BertTokenizer),
+    'bert': (BertConfig, BertForSequenceClassification_v1_AddHidLoss, BertTokenizer),
     'roberta': (RobertaConfig, RobertaForSequenceClassification, RobertaTokenizer)
 }
 
@@ -123,10 +123,12 @@ def batch_list_to_batch_tensors(features):
 
 
 class pretraining_dataset(Dataset):
+    
     def __init__(self, input_file_list, max_pred_length):
         # self.input_file = input_file
         self.input_file_list = input_file_list
         self.max_pred_length = max_pred_length
+        
         inputs_list = []
         # print('****** 64 hdf5 files in total for each sub-part, size = 15-17 G ******')
         print("*** Num of hdf5_files for this part = {}".format(len(input_file_list)))
@@ -136,17 +138,13 @@ class pretraining_dataset(Dataset):
             keys = ['input_ids', 'input_mask', 'segment_ids', 'masked_lm_positions', 'masked_lm_ids',
                     'next_sentence_labels']
             inputs_list.append([np.asarray(f[key][:]) for key in keys])
-
-            # if file_id < 2:
-            #     print('')
-            #     print("file_id: ", file_id, "input: ", [np.asarray(f[key][:]) for key in keys])
-            #     print('')
-
             f.close()
-        self.inputs = list(map(lambda x :np.concatenate(x[:]) ,zip(*inputs_list)))
+        self.inputs = list(map(lambda x :np.concatenate(x[:]), zip(*inputs_list)))
+    
     def __len__(self):
         'Denotes the total number of samples'
         return len(self.inputs[0])
+    
     def __getitem__(self, index):
         [input_ids, input_mask, segment_ids, masked_lm_positions, masked_lm_ids, next_sentence_labels] = [
             torch.from_numpy(input[index].astype(np.int64)) if indice < 5 else torch.from_numpy(
@@ -158,6 +156,7 @@ class pretraining_dataset(Dataset):
         if len(padded_mask_indices) != 0:
             index = padded_mask_indices[0].item()
         masked_lm_labels[masked_lm_positions[:index]] = masked_lm_ids[:index]
+        
         return [input_ids, segment_ids, input_mask,
                 masked_lm_labels, next_sentence_labels]
 
@@ -174,13 +173,11 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
 
     # total_train_examples = 0
     # # for epoch in np.arange(args.num_train_epochs):
-    # # for epoch in np.arange(2):
     # for epoch in np.arange(num_sub_parts):
     #     print("****** Sub data No. = {}".format(epoch))
     #     data_file_list = files[int(epoch * step_files) : int((epoch+1) * step_files)]
     #     epoch_dataset = pretraining_dataset(data_file_list, args.max_predictions_per_seq)
     #     total_train_examples += len(epoch_dataset)
-    #     print("current total_train_examples: ", total_train_examples)
     
     # print("")
     # print("total_train_examples: ", total_train_examples)
@@ -316,7 +313,7 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                     batch = tuple(t.to(args.device) for t in batch)
 
                     # # debug 
-                    # if step == 4:
+                    # if step == 10:
                     #     break
 
                     # current_best = 0
@@ -336,15 +333,12 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                     # inputs_stu = {'input_ids': batch[0], 'attention_mask': batch[1], 'labels': batch[3][:, 0],
                     #         'token_type_ids': batch[2] if args.model_type in ['bert'] else None, 'is_student': True}
 
-                    # # for wiki_book data
-                    # # batch[3][:, 0]: 'labels' is meaningless when KD; [:,0] for matching shape
-                    # inputs = {'input_ids': batch[0], 'attention_mask': batch[2], 'labels': batch[3][:,0]*0,
-                    #         'token_type_ids': batch[1] if args.model_type in ['bert'] else None}
-                    # inputs_stu = {'input_ids': batch[0], 'attention_mask': batch[2], 'labels': batch[3][:,0]*0,
-                    #         'token_type_ids': batch[1] if args.model_type in ['bert'] else None, 'is_student': True}
-
-                    inputs_stu = {'input_ids': batch[0], 'attention_mask': batch[2], 'masked_lm_labels': batch[3],
-                            'token_type_ids': batch[1] if args.model_type in ['bert'] else None, 'next_sentence_label': batch[4]}
+                    # for wiki_book data
+                    # batch[3][:, 0]: 'labels' is meaningless when KD; [:,0] for matching shape
+                    inputs = {'input_ids': batch[0], 'attention_mask': batch[2], 'labels': batch[3][:,0]*0,
+                            'token_type_ids': batch[1] if args.model_type in ['bert'] else None}
+                    inputs_stu = {'input_ids': batch[0], 'attention_mask': batch[2], 'labels': batch[3][:,0]*0,
+                            'token_type_ids': batch[1] if args.model_type in ['bert'] else None, 'is_student': True}
 
                     # print('')
                     # print('batch[3]: ', batch[3].shape)
@@ -366,7 +360,6 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                     # # subs_sorted = list(itertools.product(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list))
                     # subs_sorted = list(itertools.product(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list, args.intermediate_mult_list))
                     # random.seed(int(global_step * torch.distributed.get_world_size())) ???
-                    
                     # random.seed(int(global_step))
                     # subs_sampled = [subs_sorted[-1], subs_sorted[0]] + random.sample(subs_sorted[1:-1], 2) # four subs: largest, smallest, two randomly sampled
                     subs_sampled = subs_sorted # one sub-net
@@ -482,13 +475,13 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                                 # loss = args.depth_lambda1 * logit_loss + args.depth_lambda3 * att_loss
                                 loss = args.depth_lambda1 * logit_loss + args.depth_lambda3 * att_loss + args.depth_lambda2 * rep_loss
                                 # width_idx += 1  # move to the next width
-                            
+
                             else: 
                                 # hard_loss, student_logit, student_reps, student_atts, _ = model(**inputs_stu)
                                 hard_loss, student_logit, student_reps, student_atts, student_atts_QQ, student_atts_KK, student_atts_VV, _ = model(**inputs_stu)
 
                                 # print('')
-                                # print("Epoch_W {}, Epoch {}, Step {}, Local_rank {}, Sub {}, Student_reps.shape {}, Student_reps {}".format(epoch_wholeset, epoch, step, args.local_rank, idx_sub, student_reps[2][0].shape, student_reps[2][0]))
+                                # print("Epoch_W {}, Epoch {}, Step {}, Local_rank {}, Sub {}, Student_reps {}".format(epoch_wholeset, epoch, step, args.local_rank, idx_sub, student_reps[2][0]))
                                 # print('')
 
                                 # distillation loss of logits
@@ -569,13 +562,6 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                                     print("rep_loss", rep_loss.item())
                                     # print("att_loss_teacher_att", att_loss_teacher_att.item())
 
-                        elif args.training_phase == 'pretrain':
-                            loss = model(**inputs_stu)[0]
-
-                            if (global_step + 1) % args.printloss_step == 0 and args.local_rank in [-1, 0]:
-                                print("------------Global_step {}----------".format(global_step))
-                                print("Pretraining loss", loss.item())                                
-
                         # stage 3: final finetuning
                         else:
                             loss = model(**inputs_stu)[0]
@@ -641,7 +627,7 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                         # save
                         if args.local_rank in [-1, 0] and global_step > 0 and args.save_checkpoint_steps > 0 and global_step % args.save_checkpoint_steps == 0:
                             print('')
-                            print("Saving model checkpoint via GPU (local_rank) = {}".format(args.local_rank))
+                            print("Saving via GPU (local_rank) = {}".format(args.local_rank))
                             print('')
 
                             if not os.path.exists(os.path.join(args.output_dir, "global_step_{}/".format(global_step))):
@@ -1225,7 +1211,6 @@ def main():
     # args.hidden_mult_list = [float(hidden) for hidden in args.hidden_mult_list.split(',')]
     # args.intermediate_mult_list = [float(intermediate) for intermediate in args.intermediate_mult_list.split(',')]
 
-
     width_tmp = [float(Fraction(width)) for width in args.width_mult_list.split(',')]
     depth_tmp = [float(Fraction(depth)) for depth in args.depth_mult_list.split(',')]
     hidden_tmp = [float(Fraction(hidden)) for hidden in args.hidden_mult_list.split(',')]
@@ -1240,10 +1225,6 @@ def main():
     args.depth_mult_list = [float(depth) for depth in args.depth_mult_list]
     args.hidden_mult_list = [float(hidden) for hidden in args.hidden_mult_list]
     args.intermediate_mult_list = [float(intermediate) for intermediate in args.intermediate_mult_list]
-
-    print('')
-    print('width_mult_list, depth_mult_list, hidden_mult_list, intermediate_mult_list: ', args.width_mult_list, args.depth_mult_list, args.hidden_mult_list, args.intermediate_mult_list)
-    print('')
 
     # # added from TinyBERT (DK)
     # samples_per_epoch = []
