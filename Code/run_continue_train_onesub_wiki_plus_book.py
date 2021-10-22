@@ -1085,7 +1085,7 @@ def main():
     parser.add_argument("--data_dir", default=None, type=str, required=True,
                         help="The input data dir. Should contain the .tsv files (or other data files) for the task.")
     parser.add_argument("--model_dir", default=None, type=str, required=True,
-                        help="The student (and teacher) model dir.")
+                        help="The student model dir.")
     parser.add_argument("--output_dir", default=None, type=str, required=True,
                         help="The output directory where trained model is saved.")
     parser.add_argument("--model_type", default=None, type=str, required=True,
@@ -1203,6 +1203,8 @@ def main():
                         help="The maximum total of masked tokens per input sequence for Masked LM.")
     parser.add_argument("--save_checkpoint_steps", default=10000, type=int,
                         help="Every steps to save checkpoints.")
+    parser.add_argument("--model_dir_teacher", default=None, type=str, required=True,
+                        help="The teacher model dir.")
 
     args = parser.parse_args()
 
@@ -1302,7 +1304,7 @@ def main():
 
     # load teacher model if necessary
     if args.training_phase == 'dynabertw' or args.training_phase == 'dynabert':
-        teacher_model = model_class.from_pretrained(args.model_dir, config=config)
+        teacher_model = model_class.from_pretrained(args.model_dir_teacher, config=config)
         teacher_model.to(args.device)
     else:
         teacher_model = None
