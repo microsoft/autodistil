@@ -77,6 +77,8 @@ if is_torch_available():
 
     from .modeling_bert_v211_OneNas_Pretrain_Primer import (BertForPreTraining_v1_Primer)
 
+    from .modeling_bert_v211_OneNas_KD_Pretrain_NoPrimer import (BertForSequenceClassification_v1_AddHidLoss_ForPreTraining)
+
     # from .modeling_bert import (BertPreTrainedModel, BertModel, BertForPreTraining,
     #                             BertForMaskedLM, BertForNextSentencePrediction,
     #                             BertForSequenceClassification, BertForMultipleChoice,
