@@ -1,4 +1,4 @@
-description: KD_plus_pretrain_wiki_book_seqlen128_PreModel_27Subs
+description: KD_wiki_plus_book_seqlen128_PreModel_256Subs
 
 target:
   service: amlk8s
@@ -50,7 +50,7 @@ search:
     name: Epochs_{Num_Train_Epochs_WholeSet}
     sku: G16
     command:
-      - python -m torch.distributed.launch --nproc_per_node=16 run_wiki_plus_book_KD_plus_pretrain_NoAssist_RndSampl.py
+      - python -m torch.distributed.launch --nproc_per_node=16 run_wiki_plus_book_NoAssist_RndSampl.py
         --model_type bert
         --task_name {TASK_NAME}
         --do_train
@@ -69,7 +69,6 @@ search:
         --depth_lambda1 {Depth_Lambda1}
         --depth_lambda2 {Depth_Lambda2}
         --depth_lambda3 {Depth_Lambda3}
-        --pretrain_lambda {Pretrain_Lambda}
         --training_phase {Training_Phase}
         --weight_decay {Weight_Decay}
         --num_train_epochs_wholeset {Num_Train_Epochs_WholeSet}
@@ -92,22 +91,22 @@ search:
       values: [4e-5] # [1e-5, 2e-5, 4e-5, 8e-5, 16e-5]
     - name: Per_GPU_Train_Batch_Size
       spec: discrete
-      values: [96]
+      values: [128] # [96]
     - name: Num_Train_Epochs
       spec: discrete
       values: [8] # 4
     - name: Depth_Mult_List
       spec: discrete
-      values: ['3/12,6/12,3']
+      values: ['3/12,12/12,4']
     - name: Width_Mult_List
       spec: discrete
-      values: ['6/12,12/12,3']
+      values: ['3/12,12/12,4']
     - name: Hidden_Mult_List
       spec: discrete
-      values: ['3/12,12/12,3']
+      values: ['3/12,12/12,4']
     - name: Intermediate_Mult_List
       spec: discrete
-      values: ['4.0,4.0,1']
+      values: ['1.0,4.0,4']
     - name: Depth_Lambda1
       spec: discrete
       values: [0.0]
@@ -115,9 +114,6 @@ search:
       spec: discrete
       values: [0.0]
     - name: Depth_Lambda3
-      spec: discrete
-      values: [1.0]
-    - name: Pretrain_Lambda
       spec: discrete
       values: [1.0]
     - name: Training_Phase
@@ -128,7 +124,7 @@ search:
       values: [0.01]
     - name: Num_Train_Epochs_WholeSet
       spec: discrete
-      values: [10]
+      values: [15]
     - name: Subs_Num
       spec: discrete
       values: [-1]
