@@ -169,8 +169,9 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
     files = [os.path.join(args.pregenerated_data, f) for f in os.listdir(args.pregenerated_data) if os.path.isfile(os.path.join(args.pregenerated_data, f)) and 'training' in f]
     files.sort()
     num_files = len(files) # num_files=256 for training files
-    num_sub_parts = 4
-    step_files = int(num_files / num_sub_parts) # int(num_files / args.num_train_epochs)
+    # num_sub_parts = 4
+    # step_files = int(num_files / num_sub_parts)
+    step_files = int(num_files / args.num_train_epochs)
 
     # total_train_examples = 0
     # # for epoch in np.arange(args.num_train_epochs):
@@ -281,8 +282,8 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
         # for epoch in trange(int(args.num_train_epochs), desc="Epoch"):
 
         random.Random(args.seed + epoch_wholeset).shuffle(files)
-        # step_files = int(num_files / args.num_train_epochs)
-        step_files = 2 # int(num_files / args.num_train_epochs)
+        step_files = int(num_files / args.num_train_epochs)
+        # step_files = 2 # int(num_files / args.num_train_epochs) # for debug
 
         for epoch in trange(int(args.num_train_epochs), desc="Local_rank {}, Epoch".format(args.local_rank)):
             
@@ -315,7 +316,7 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                 for step, batch in enumerate(tqdm(train_dataloader, desc="Local_rank {}, Iteration".format(args.local_rank), ascii=True)):
                     batch = tuple(t.to(args.device) for t in batch)
 
-                    # # debug 
+                    # # for debug 
                     # if step == 10:
                     #     break
 
@@ -961,6 +962,7 @@ class PregeneratedDataset(Dataset):
             # for i, line in enumerate(tqdm(f, total=num_samples, desc="Training examples")):
             for i, line in enumerate(tqdm(f, total=num_samples, desc="Local_rank {}, Training examples".format(args.local_rank))):
                 
+                # # for debug
                 # if i == 100:
                 #     break
                 # if i == 100000:

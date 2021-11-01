@@ -279,7 +279,7 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
 
         random.Random(args.seed + epoch_wholeset).shuffle(files)
         step_files = int(num_files / args.num_train_epochs)
-        # step_files = 2 # int(num_files / args.num_train_epochs)
+        # step_files = 2 # int(num_files / args.num_train_epochs) # for debug
 
         for epoch in trange(int(args.num_train_epochs), desc="Local_rank {}, Epoch".format(args.local_rank)):
             
@@ -312,7 +312,7 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                 for step, batch in enumerate(tqdm(train_dataloader, desc="Local_rank {}, Iteration".format(args.local_rank), ascii=True)):
                     batch = tuple(t.to(args.device) for t in batch)
 
-                    # # debug 
+                    # # # for debug 
                     # if step == 10:
                     #     break
 
@@ -1011,6 +1011,7 @@ class PregeneratedDataset(Dataset):
             # for i, line in enumerate(tqdm(f, total=num_samples, desc="Training examples")):
             for i, line in enumerate(tqdm(f, total=num_samples, desc="Local_rank {}, Training examples".format(args.local_rank))):
                 
+                # # for debug
                 # if i == 100:
                 #     break
                 if i % 100000 == 0:
