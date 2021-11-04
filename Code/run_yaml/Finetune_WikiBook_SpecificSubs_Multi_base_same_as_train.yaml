@@ -1,4 +1,4 @@
-description: Finetune_WikiBook_base
+description: Finetune_WikiBook_base_same_as_train
 
 target:
   service: amlk8s
@@ -72,7 +72,7 @@ search:
   params:
     - name: TASK_NAME
       spec: discrete
-      values: ['MNLI', 'RTE']
+      values: ['RTE', 'MNLI']
     - name: Max_Seq_Length
       spec: discrete
       values: [128]
@@ -85,18 +85,18 @@ search:
     - name: Num_Train_Epochs
       spec: discrete
       values: [20]
-    - name: Depth_Mult_List                    ## base = H, A, R, L = 32*18, 12, 4.0, 12 = 66,019,968
+    - name: Depth_Mult_List               
       spec: discrete
-      values: ['1.0']                          # Layer (12)
+      values: ['0.25', '0.375', '0.5']   
     - name: Width_Mult_List
       spec: discrete
-      values: ['0.917', '1.0']                 # Head (11, 12)
+      values: ['0.5', '0.75', '1.0']         # [0.083, 0.167, 0.25, 0.333, 0.417, 0.5, 0.583, 0.667, 0.75 , 0.833, 0.917, 1.0 ]
     - name: Hidden_Mult_List
       spec: discrete
-      values: ['0.708', '0.75']                # Hid (544, 576)
+      values: ['0.25', '0.625', '1.0']       
     - name: Intermediate_Mult_List
       spec: discrete
-      values: ['3.5', '4.0']                   # Ratio (3.5, 4.0)
+      values: ['4.0']            
     - name: Training_Phase
       spec: discrete
       values: ['final_finetuning']
