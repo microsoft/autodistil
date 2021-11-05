@@ -67,7 +67,7 @@ search:
         --intermediate_mult_list {Intermediate_Mult_List}
         --training_phase {Training_Phase}
   type: grid
-  max_trials: 100
+  max_trials: 50
   # parallel_trials: 2 ???
   params:
     - name: TASK_NAME
