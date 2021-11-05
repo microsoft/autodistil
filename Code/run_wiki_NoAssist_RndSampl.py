@@ -926,15 +926,17 @@ class PregeneratedDataset(Dataset):
                 torch.tensor(self.lm_label_ids[item].astype(np.int64)),
                 torch.tensor(int(self.is_nexts[item])))
 
+# BERT_base for GLUE
 def cal_para_bert(archi):
+    # https://github.com/google-research/bert/issues/656
     # emb: 768*30522
     # att*12: 768x768*4*12
     # ff*12: 768x768*4*2*12
-    # pred: 768x768*2
-    # 23.8 + 28.3 + 56.6 + 1.2 = 109.9
+    # pool: 768*768
+    # pred: 768*2
     # L, A, H, R= 12, 12, 768, 4.0
     L, A, H, R = archi[0]*12, archi[1]*12, archi[2]*768, archi[3]
-    return H*30522 + H*H*4*A/12*L + H*H*R*2*L + H*H*2
+    return H*(30522+512+2+2) + (H*H+H*H*3*A/12+H*4+H*2)*L + (H*H*R*2+H*R+H+H*2)*L + H*H + H*2
 
 
 def subs_para_range(depth_mult_list, width_mult_list, hidden_mult_list, intermediate_mult_list, start_size, stop_size, subs_num):

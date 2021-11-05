@@ -242,12 +242,16 @@ def train(args, train_dataset, model, tokenizer, teacher_model=None):
 
                                 results = evaluate(args, model, tokenizer)
                                 # print("results: ", results)
+                                n_para = cal_para_bert((depth_mult, width_mult, hidden_mult, intermediate_mult))
+                                n_flops = cal_flops_bert((depth_mult, width_mult, hidden_mult, intermediate_mult, args.max_seq_length))
 
                                 logger.info("********** start evaluate results *********")
                                 logger.info("depth_mult: %s ", depth_mult)
                                 logger.info("width_mult: %s ", width_mult)
                                 logger.info("hidden_mult: %s ", hidden_mult)
                                 logger.info("hidden_mult: %s ", intermediate_mult)
+                                logger.info("num_para: %s ", n_para)
+                                logger.info("num_FLOPs: %s ", n_flops)
                                 logger.info("results: %s ", results)
                                 logger.info("********** end evaluate results *********")
 
@@ -255,30 +259,17 @@ def train(args, train_dataset, model, tokenizer, teacher_model=None):
                                 if args.task_name == "mnli":
                                     acc_both.append(list(results.values())[0:2])
 
-                if args.task_name == "mnli":
-                    print("*** acc_both ***{}\n".format(acc_both))
-                    with open(output_eval_file, "a") as writer:
-                        # writer.write("{}\n".format(acc_both))
-                        writer.write("epoch = {}, acc_both = {}\n".format(epoch_training, acc_both))
-                        writer.write("\n")
-                else:
-                    print("*** acc ***{}\n".format(acc))
-                    with open(output_eval_file, "a") as writer:
-                        # writer.write("{}\n" .format(acc))
-                        writer.write("epoch = {}, acc = {}\n".format(epoch_training, acc))
-                        writer.write("\n")
-
                 # save model
                 if sum(acc) > current_best:
                     current_best = sum(acc)
-                    # if args.task_name == "mnli":
-                    #     print("***best***{}\n".format(acc_both))
-                    #     with open(output_eval_file, "a") as writer:
-                    #         writer.write("{}\n".format(acc_both))
-                    # else:
-                    #     print("***best***{}\n".format(acc))
-                    #     with open(output_eval_file, "a") as writer:
-                    #         writer.write("{}\n" .format(acc))
+                    if args.task_name == "mnli":
+                        print("***best***{}\n".format(acc_both))
+                        with open(output_eval_file, "w") as writer:
+                            writer.write("{}, {}, {}\n".format(acc_both, n_para, n_flops))
+                    else:
+                        print("***best***{}\n".format(acc))
+                        with open(output_eval_file, "w") as writer:
+                            writer.write("{}, {}, {}\n" .format(acc, n_para, n_flops))
 
                     logger.info("Saving model checkpoint to %s", args.output_dir)
                     model_to_save = model.module if hasattr(model, 'module') else model
@@ -370,8 +361,8 @@ def evaluate(args, model, tokenizer, prefix=""):
             logger.info("***** Eval results {} *****".format(prefix))
             for key in sorted(result.keys()):
                 logger.info("  %s = %s", key, str(result[key]))
-                writer.write("%s = %s\n" % (key, str(result[key])))
-            writer.write("\n")
+                # writer.write("%s = %s\n" % (key, str(result[key])))
+            # writer.write("\n")
     return results
 
 
@@ -497,6 +488,30 @@ def reorder_neuron_head(model, head_importance, neuron_importance):
         base_model.encoder.layer[layer].intermediate.reorder_neurons(idx)
         base_model.encoder.layer[layer].output.reorder_neurons(idx)
 
+# BERT_base for GLUE
+def cal_para_bert(archi):
+    # https://github.com/google-research/bert/issues/656
+    # emb: 768*30522
+    # att*12: 768x768*4*12
+    # ff*12: 768x768*4*2*12
+    # pool: 768*768
+    # pred: 768*2
+    # L, A, H, R= 12, 12, 768, 4.0
+    L, A, H, R = archi[0]*12, archi[1]*12, archi[2]*768, archi[3]
+    return H*(30522+512+2+2) + (H*H+H*H*3*A/12+H*4+H*2)*L + (H*H*R*2+H*R+H+H*2)*L + H*H + H*2
+
+# BERT_base for GLUE
+def cal_flops_bert(archi):
+    # emb: 768*30522
+    # att*12: 768x768*4*12
+    # ff*12: 768x768*4*2*12
+    # pool: 768*768
+    # pred: 768*2
+    # L, A, H, R= 12, 12, 768, 4.0
+    # n = 128
+
+    L, A, H, R, n = archi[0]*12, archi[1]*12, archi[2]*768, archi[3], archi[4]
+    return (n*3*H*H*(A/12) + n*n*(A/12)*H*2 + n*H*H + n*2*R*H*H)*L + n*H*H + 2*H
 
 def main():
     parser = argparse.ArgumentParser()

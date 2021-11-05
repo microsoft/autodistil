@@ -1,4 +1,4 @@
-description: KD_wiki_plus_book_seqlen128_PreModel_Base_256Subs
+description: Finetune_WikiBook_base_all256
 
 target:
   service: amlk8s
@@ -47,16 +47,15 @@ storage:
 
 search:
   job_template:
-    name: Epochs_{Num_Train_Epochs_WholeSet}
-    sku: G16
+    name: Task_{TASK_NAME}_Layer_{Depth_Mult_List}_Hid_{Hidden_Mult_List}_Head_{Width_Mult_List}_Ratio_{Intermediate_Mult_List}
+    sku: G1
     command:
-      - python -m torch.distributed.launch --nproc_per_node=16 run_wiki_plus_book_NoAssist_RndSampl.py
+      - python finetune_glue.py
         --model_type bert
         --task_name {TASK_NAME}
         --do_train
         --data_dir $$PT_DATA_DIR/Data_GLUE/glue_data/{TASK_NAME}/
-        --pregenerated_data $$PT_DATA_DIR/English_Wiki_Book/Seq_len_128/
-        --model_dir $$PT_DATA_DIR/Local_models/pretrained_BERTs/BERT_base_uncased/
+        --model_dir $$PT_DATA_DIR/.../  # neat-oriole
         --output_dir $$PT_OUTPUT_DIR/
         --max_seq_length {Max_Seq_Length}
         --learning_rate {LR}
@@ -66,74 +65,38 @@ search:
         --depth_mult_list {Depth_Mult_List}
         --width_mult_list {Width_Mult_List}
         --intermediate_mult_list {Intermediate_Mult_List}
-        --depth_lambda1 {Depth_Lambda1}
-        --depth_lambda2 {Depth_Lambda2}
-        --depth_lambda3 {Depth_Lambda3}
         --training_phase {Training_Phase}
-        --weight_decay {Weight_Decay}
-        --num_train_epochs_wholeset {Num_Train_Epochs_WholeSet}
-        --subs_num {Subs_Num}
-        --printloss_step {Printloss_Step}
-        --max_predictions_per_seq {Max_Predictions_Per_Seq}
-        --save_checkpoint_steps {Save_Checkpoint_Steps}
   type: grid
-  max_trials: 50
+  max_trials: 100
   # parallel_trials: 2 ???
   params:
     - name: TASK_NAME
       spec: discrete
-      values: ['MRPC']
+      values: ['RTE']
     - name: Max_Seq_Length
       spec: discrete
       values: [128]
     - name: LR
       spec: discrete
-      values: [4e-5] # [1e-5, 2e-5, 4e-5, 8e-5, 16e-5]
+      values: [2e-5]
     - name: Per_GPU_Train_Batch_Size
       spec: discrete
-      values: [128] # [96]
+      values: [32]
     - name: Num_Train_Epochs
       spec: discrete
-      values: [8] # 4
-    - name: Depth_Mult_List
+      values: [20]                  # [0.083, 0.167, 0.25, 0.333, 0.417, 0.5, 0.583, 0.667, 0.75 , 0.833, 0.917, 1.0 ]
+    - name: Depth_Mult_List                    ## base = H, A, R, L = 32*18, 12, 4.0, 12 = 66,019,968
       spec: discrete
-      values: ['9/12,12/12,4'] # Layer (9-12)    ==>  (bellow)
+      values: ['0.75', '0.833', '0.917', '1.0']  
     - name: Width_Mult_List
       spec: discrete
-      values: ['9/12,12/12,4'] # Head (9-12)     ==>  (bellow)
+      values: ['0.75', '0.833', '0.917', '1.0']       
     - name: Hidden_Mult_List
       spec: discrete
-      values: ['17/24,20/24,4'] # Hid (544-640)  ==>  (bellow)
+      values: ['0.708', '0.75', '0.792', '0.833']   
     - name: Intermediate_Mult_List
       spec: discrete
-      values: ['2.5,4.0,4'] # Ratio (2.5-4.0)    ==>  para_n (38,503,232-79,335,680) around
-    - name: Depth_Lambda1
-      spec: discrete
-      values: [0.0]
-    - name: Depth_Lambda2
-      spec: discrete
-      values: [0.0]
-    - name: Depth_Lambda3
-      spec: discrete
-      values: [1.0]
+      values: ['2.5', '3.0', '3.5', '4.0']         
     - name: Training_Phase
       spec: discrete
-      values: ['dynabert']
-    - name: Weight_Decay
-      spec: discrete
-      values: [0.01]
-    - name: Num_Train_Epochs_WholeSet
-      spec: discrete
-      values: [15]
-    - name: Subs_Num
-      spec: discrete
-      values: [-1]
-    - name: Printloss_Step
-      spec: discrete
-      values: [1000]
-    - name: Max_Predictions_Per_Seq
-      spec: discrete
-      values: [20]
-    - name: Save_Checkpoint_Steps
-      spec: discrete
-      values: [10000]
+      values: ['final_finetuning']
