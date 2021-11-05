@@ -1,4 +1,4 @@
-description: Finetune_WikiBook_small
+description: Finetune_WikiBook_small_all256
 
 target:
   service: amlk8s
@@ -55,7 +55,7 @@ search:
         --task_name {TASK_NAME}
         --do_train
         --data_dir $$PT_DATA_DIR/Data_GLUE/glue_data/{TASK_NAME}/
-        --model_dir $$PT_DATA_DIR/.../
+        --model_dir $$PT_DATA_DIR/.../  # rich-fawn
         --output_dir $$PT_OUTPUT_DIR/
         --max_seq_length {Max_Seq_Length}
         --learning_rate {LR}
@@ -67,12 +67,12 @@ search:
         --intermediate_mult_list {Intermediate_Mult_List}
         --training_phase {Training_Phase}
   type: grid
-  max_trials: 100
+  max_trials: 50
   # parallel_trials: 2 ???
   params:
     - name: TASK_NAME
       spec: discrete
-      values: ['MNLI', 'RTE']
+      values: ['RTE']
     - name: Max_Seq_Length
       spec: discrete
       values: [128]
@@ -84,19 +84,19 @@ search:
       values: [32]
     - name: Num_Train_Epochs
       spec: discrete
-      values: [20]
+      values: [20]                  # [0.083, 0.167, 0.25, 0.333, 0.417, 0.5, 0.583, 0.667, 0.75 , 0.833, 0.917, 1.0 ]
     - name: Depth_Mult_List                    ## base = H, A, R, L = 32*18, 12, 4.0, 12 = 66,019,968
       spec: discrete
-      values: ['1.0']                          # Layer (12)
+      values: ['0.75', '0.833', '0.917', '1.0']  
     - name: Width_Mult_List
       spec: discrete
-      values: ['0.917', '1.0']                 # Head (11, 12)
+      values: ['0.583', '0.667', '0.75', '0.833']       
     - name: Hidden_Mult_List
       spec: discrete
-      values: ['0.708', '0.75']                # Hid (544, 576)
+      values: ['0.3333', '0.375', '0.417', '0.4583']   
     - name: Intermediate_Mult_List
       spec: discrete
-      values: ['3.5', '4.0']                   # Ratio (3.5, 4.0)   
+      values: ['2.5', '3.0', '3.5', '4.0']         
     - name: Training_Phase
       spec: discrete
       values: ['final_finetuning']
