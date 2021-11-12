@@ -154,6 +154,11 @@ def train(args, train_dataset, model, tokenizer, teacher_model=None):
     set_seed(args)
 
     current_best = 0
+    best_acc = []
+    best_acc_both = []
+    best_n_para = []
+    best_n_flops = []
+    best_results = []
     output_eval_file = os.path.join(args.output_dir, 'eval_results.txt')
 
     epoch_training = 0
@@ -161,7 +166,7 @@ def train(args, train_dataset, model, tokenizer, teacher_model=None):
         epoch_iterator = tqdm(train_dataloader, desc="Iteration")
         # epoch_iterator_1 = tqdm(train_dataloader_1, desc="Iteration")
         for step, batch in enumerate(epoch_iterator):
-            print('step: ', step)
+            # print('step: ', step)
 
             # # debug
             # if step > 10:
@@ -224,7 +229,7 @@ def train(args, train_dataset, model, tokenizer, teacher_model=None):
         # evaluate
         # if global_step > 0 and args.logging_steps > 0 and global_step % args.logging_steps == 0:
         if args.local_rank in [-1, 0]:
-            print('Evaluate: epoch_training is ', epoch_training)
+            # print('Evaluate: epoch_training is ', epoch_training)
             if args.evaluate_during_training:
                 acc = []
                 if args.task_name == "mnli":   # for both MNLI-m and MNLI-mm
@@ -245,15 +250,15 @@ def train(args, train_dataset, model, tokenizer, teacher_model=None):
                                 n_para = cal_para_bert((depth_mult, width_mult, hidden_mult, intermediate_mult))
                                 n_flops = cal_flops_bert((depth_mult, width_mult, hidden_mult, intermediate_mult, args.max_seq_length))
 
-                                logger.info("********** start evaluate results *********")
-                                logger.info("depth_mult: %s ", depth_mult)
-                                logger.info("width_mult: %s ", width_mult)
-                                logger.info("hidden_mult: %s ", hidden_mult)
-                                logger.info("hidden_mult: %s ", intermediate_mult)
-                                logger.info("num_para: %s ", n_para)
-                                logger.info("num_FLOPs: %s ", n_flops)
-                                logger.info("results: %s ", results)
-                                logger.info("********** end evaluate results *********")
+                                # logger.info("********** start evaluate results *********")
+                                # logger.info("depth_mult: %s ", depth_mult)
+                                # logger.info("width_mult: %s ", width_mult)
+                                # logger.info("hidden_mult: %s ", hidden_mult)
+                                # logger.info("hidden_mult: %s ", intermediate_mult)
+                                # logger.info("num_para: %s ", n_para)
+                                # logger.info("num_FLOPs: %s ", n_flops)
+                                # logger.info("results: %s ", results)
+                                # logger.info("********** end evaluate results *********")
 
                                 acc.append(list(results.values())[0])
                                 if args.task_name == "mnli":
@@ -263,15 +268,19 @@ def train(args, train_dataset, model, tokenizer, teacher_model=None):
                 if sum(acc) > current_best:
                     current_best = sum(acc)
                     if args.task_name == "mnli":
-                        print("***best***{}\n".format(acc_both))
+                        # print("***best***{}\n".format(acc_both))
+                        best_acc_both, best_n_para, best_n_flops = acc_both, n_para, n_flops
+                        best_results = results
                         with open(output_eval_file, "w") as writer:
                             writer.write("{}, {}, {}\n".format(acc_both, n_para, n_flops))
                     else:
-                        print("***best***{}\n".format(acc))
+                        # print("***best***{}\n".format(acc))
+                        best_acc, best_n_para, best_n_flops = acc, n_para, n_flops
+                        best_results = results
                         with open(output_eval_file, "w") as writer:
                             writer.write("{}, {}, {}\n" .format(acc, n_para, n_flops))
 
-                    logger.info("Saving model checkpoint to %s", args.output_dir)
+                    # logger.info("Saving model checkpoint to %s", args.output_dir)
                     model_to_save = model.module if hasattr(model, 'module') else model
                     model_to_save.save_pretrained(args.output_dir)
                     torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))
@@ -304,6 +313,13 @@ def train(args, train_dataset, model, tokenizer, teacher_model=None):
         #     torch.save(args, os.path.join(args.output_dir, "epoch_{}/".format(epoch_training), 'training_args.bin'))
 
         epoch_training += 1
+
+    if args.task_name == "mnli":
+        print("***best***{}, {}, {}\n".format(best_acc_both, best_n_para, best_n_flops))
+        print("***best_results***: %s ", results)
+    else:
+        print("***best***{}, {}, {}\n".format(best_acc, best_n_para, best_n_flops))
+        print("***best_results***: %s ", results)
 
 def evaluate(args, model, tokenizer, prefix=""):
     """ Evaluate the model """
@@ -614,7 +630,7 @@ def main():
     # Setup CUDA, GPU & distributed training
     device = torch.device("cuda" if torch.cuda.is_available()  else "cpu")
     args.n_gpu = torch.cuda.device_count()
-    print('n_gpu: ', args.n_gpu)
+    # print('n_gpu: ', args.n_gpu)
     args.device = device
 
     # Set seed
@@ -678,11 +694,11 @@ def main():
 
     # Training
     if args.do_train:
-        print('')
-        print('Constructing train_dataset starts')
+        # print('')
+        # print('Constructing train_dataset starts')
         train_dataset = load_and_cache_examples(args, args.task_name, tokenizer, evaluate=False)
-        print('Constructing train_dataset done!')
-        print('')
+        # print('Constructing train_dataset done!')
+        # print('')
         
         if teacher_model:
             # global_step, tr_loss = train(args, train_dataset, model, tokenizer, teacher_model)

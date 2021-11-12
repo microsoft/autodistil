@@ -1,4 +1,4 @@
-description: Finetune_WikiBook_base_all256
+description: Finetune_WikiBook_base_all256_MNLI
 
 target:
   service: amlk8s
@@ -67,12 +67,12 @@ search:
         --intermediate_mult_list {Intermediate_Mult_List}
         --training_phase {Training_Phase}
   type: grid
-  max_trials: 50
+  max_trials: 100
   # parallel_trials: 2 ???
   params:
     - name: TASK_NAME
       spec: discrete
-      values: ['RTE']
+      values: ['MNLI']
     - name: Max_Seq_Length
       spec: discrete
       values: [128]
@@ -84,7 +84,7 @@ search:
       values: [32]
     - name: Num_Train_Epochs
       spec: discrete
-      values: [20]                  # [0.083, 0.167, 0.25, 0.333, 0.417, 0.5, 0.583, 0.667, 0.75 , 0.833, 0.917, 1.0 ]
+      values: [12]                  # [0.083, 0.167, 0.25, 0.333, 0.417, 0.5, 0.583, 0.667, 0.75 , 0.833, 0.917, 1.0 ]
     - name: Depth_Mult_List                    ## base = H, A, R, L = 32*18, 12, 4.0, 12 = 66,019,968
       spec: discrete
       values: ['0.75', '0.833', '0.917', '1.0']  
