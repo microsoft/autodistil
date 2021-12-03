@@ -114,7 +114,8 @@ def batch_list_to_batch_tensors(features):
     return batch_tensors
 
 
-def train(args, train_dataset, TrainEval_dataset, model, tokenizer, teacher_model=None):
+# def train(args, train_dataset, TrainEval_dataset, model, tokenizer, teacher_model=None):
+def train(args, train_dataset, model, tokenizer, teacher_model=None):
     """ Train the model """
 
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
@@ -158,13 +159,22 @@ def train(args, train_dataset, TrainEval_dataset, model, tokenizer, teacher_mode
 
     best_acc = []
     best_acc_both = []
+    best_results = []
+
+    list_acc = []
+    list_acc_both = []
+    list_results = []
+
     best_n_para = []
     best_n_flops = []
-    best_results = []
 
     best_acc_TrainEval = []
     best_acc_both_TrainEval = []
     best_results_TrainEval = []
+
+    list_acc_TrainEval = []
+    list_acc_both_TrainEval = []
+    list_results_TrainEval = []
 
     output_eval_file = os.path.join(args.output_dir, 'eval_results.txt')
     output_eval_TrainEval_file = os.path.join(args.output_dir, 'eval_TrainEval_results.txt')
@@ -257,7 +267,7 @@ def train(args, train_dataset, TrainEval_dataset, model, tokenizer, teacher_mode
                                 model.apply(lambda m: setattr(m, 'intermediate_mult', intermediate_mult))
 
                                 results = evaluate(args, model, tokenizer)
-                                results_TrainEval = evaluate_TrainEval(args, model, tokenizer, TrainEval_dataset)
+                                results_TrainEval = evaluate_Train(args, model, tokenizer, train_dataset)
 
                                 # print("results: ", results)
                                 n_para = cal_para_bert((depth_mult, width_mult, hidden_mult, intermediate_mult))
@@ -282,21 +292,52 @@ def train(args, train_dataset, TrainEval_dataset, model, tokenizer, teacher_mode
                                 if args.task_name == "mnli":
                                     acc_both_TrainEval.append(list(results_TrainEval.values())[0:2])
 
+                # save eval results each epoch
+                if args.task_name == "mnli":
+                    # print("***best***{}\n".format(acc_both))
+                    list_acc_both.append(acc_both)
+                    list_n_para.append(n_para)
+                    list_n_flops.append(n_flops)
+                    list_results.append(results)
+
+                    list_acc_both_TrainEval.append(acc_both_TrainEval)
+                    list_results_TrainEval.append(results_TrainEval)
+
+                    with open(output_eval_file, "a") as writer:
+                        writer.write("{}, {}, {}\n".format(acc_both, n_para, n_flops))
+                    with open(output_eval_TrainEval_file, "a") as writer:
+                        writer.write("{}, {}, {}\n".format(acc_both_TrainEval, n_para, n_flops))
+
+                else:
+                    # print("***best***{}\n".format(acc))
+                    list_acc.append(acc)
+                    list_n_para.append(n_para)
+                    list_n_flops.append(n_flops)
+                    list_results.append(results)
+
+                    list_acc_TrainEval.append(acc_TrainEval)
+                    list_results_TrainEval.append(results_TrainEval)
+
+                    with open(output_eval_file, "a") as writer:
+                        writer.write("{}, {}, {}\n" .format(acc, n_para, n_flops))
+                    with open(output_eval_TrainEval_file, "a") as writer:
+                        writer.write("{}, {}, {}\n" .format(acc_TrainEval, n_para, n_flops))
+
                 # save model
                 if sum(acc) > current_best:
                     current_best = sum(acc)
-                    if args.task_name == "mnli":
-                        # print("***best***{}\n".format(acc_both))
-                        best_acc_both, best_n_para, best_n_flops = acc_both, n_para, n_flops
-                        best_results = results
-                        with open(output_eval_file, "w") as writer:
-                            writer.write("{}, {}, {}\n".format(acc_both, n_para, n_flops))
-                    else:
-                        # print("***best***{}\n".format(acc))
-                        best_acc, best_n_para, best_n_flops = acc, n_para, n_flops
-                        best_results = results
-                        with open(output_eval_file, "w") as writer:
-                            writer.write("{}, {}, {}\n" .format(acc, n_para, n_flops))
+                    # if args.task_name == "mnli":
+                    #     # print("***best***{}\n".format(acc_both))
+                    #     best_acc_both, best_n_para, best_n_flops = acc_both, n_para, n_flops
+                    #     best_results = results
+                    #     with open(output_eval_file, "w") as writer:
+                    #         writer.write("{}, {}, {}\n".format(acc_both, n_para, n_flops))
+                    # else:
+                    #     # print("***best***{}\n".format(acc))
+                    #     best_acc, best_n_para, best_n_flops = acc, n_para, n_flops
+                    #     best_results = results
+                    #     with open(output_eval_file, "w") as writer:
+                    #         writer.write("{}, {}, {}\n" .format(acc, n_para, n_flops))
 
                     # logger.info("Saving model checkpoint to %s", args.output_dir)
                     model_to_save = model.module if hasattr(model, 'module') else model
@@ -306,21 +347,21 @@ def train(args, train_dataset, TrainEval_dataset, model, tokenizer, teacher_mode
                     tokenizer.save_vocabulary(args.output_dir)
 
 
-                # save eval_TrainEval results
-                if sum(acc_TrainEval) > current_best_TrainEval:
-                    current_best_TrainEval = sum(acc_TrainEval)
-                    if args.task_name == "mnli":
-                        # print("***best TrainEval***{}\n".format(acc_both_TrainEval))
-                        best_acc_both_TrainEval, best_n_para, best_n_flops = acc_both_TrainEval, n_para, n_flops
-                        best_results_TrainEval = results_TrainEval
-                        with open(output_eval_TrainEval_file, "w") as writer:
-                            writer.write("{}, {}, {}\n".format(acc_both_TrainEval, n_para, n_flops))
-                    else:
-                        # print("***best TrainEval***{}\n".format(acc_TrainEval))
-                        best_acc_TrainEval, best_n_para, best_n_flops = acc_TrainEval, n_para, n_flops
-                        best_results_TrainEval = results_TrainEval
-                        with open(output_eval_TrainEval_file, "w") as writer:
-                            writer.write("{}, {}, {}\n" .format(acc_TrainEval, n_para, n_flops))
+                # # save eval_TrainEval results
+                # if sum(acc_TrainEval) > current_best_TrainEval:
+                #     current_best_TrainEval = sum(acc_TrainEval)
+                #     if args.task_name == "mnli":
+                #         # print("***best TrainEval***{}\n".format(acc_both_TrainEval))
+                #         best_acc_both_TrainEval, best_n_para, best_n_flops = acc_both_TrainEval, n_para, n_flops
+                #         best_results_TrainEval = results_TrainEval
+                #         with open(output_eval_TrainEval_file, "w") as writer:
+                #             writer.write("{}, {}, {}\n".format(acc_both_TrainEval, n_para, n_flops))
+                #     else:
+                #         # print("***best TrainEval***{}\n".format(acc_TrainEval))
+                #         best_acc_TrainEval, best_n_para, best_n_flops = acc_TrainEval, n_para, n_flops
+                #         best_results_TrainEval = results_TrainEval
+                #         with open(output_eval_TrainEval_file, "w") as writer:
+                #             writer.write("{}, {}, {}\n" .format(acc_TrainEval, n_para, n_flops))
 
 
         #     if 0 < t_total < global_step:
@@ -351,12 +392,12 @@ def train(args, train_dataset, TrainEval_dataset, model, tokenizer, teacher_mode
         epoch_training += 1
 
     if args.task_name == "mnli":
-        print("***best***{}, {}, {}\n".format(best_acc_both, best_acc_both_TrainEval, best_n_para, best_n_flops))
+        print("***list performance*** {}, {}, {}\n".format(list_acc_both, list_acc_both_TrainEval, list_n_para, list_n_flops))
     else:
-        print("***best***{}, {}, {}\n".format(best_acc, best_acc_TrainEval, best_n_para, best_n_flops))
+        print("***list performance*** {}, {}, {}\n".format(list_acc, list_acc_TrainEval, list_n_para, list_n_flops))
     
-    print("***best_results***: %s ", best_results)
-    print("***best_results_TrainEval***: %s ", best_results_TrainEval)
+    print("***list_results***: %s " % list_results)
+    print("***list_results_TrainEval***: %s " % list_results_TrainEval)
 
 
 def evaluate(args, model, tokenizer, prefix=""):
@@ -420,7 +461,7 @@ def evaluate(args, model, tokenizer, prefix=""):
     return results
 
 
-def evaluate_TrainEval(args, model, tokenizer, TrainEval_dataset, prefix=""):
+def evaluate_Train(args, model, tokenizer, Train_dataset, prefix=""):
     """ Evaluate the model """
     eval_task_names = ("mnli", "mnli-mm") if args.task_name == "mnli" else (args.task_name,)
     eval_outputs_dirs = (args.output_dir, args.output_dir + 'MM') if args.task_name == "mnli" else (args.output_dir,)
@@ -428,7 +469,7 @@ def evaluate_TrainEval(args, model, tokenizer, TrainEval_dataset, prefix=""):
     results = {}
     for eval_task, eval_output_dir in zip(eval_task_names, eval_outputs_dirs):
         # eval_dataset = load_and_cache_examples(args, eval_task, tokenizer, evaluate=False, eval_from_train=True)
-        eval_dataset = TrainEval_dataset
+        eval_dataset = Train_dataset
 
         if not os.path.exists(eval_output_dir):
             os.makedirs(eval_output_dir)
@@ -809,15 +850,17 @@ def main():
     if args.do_train:
         # print('')
         # print('Constructing train_dataset starts')
-        train_dataset, TrainEval_dataset = load_and_cache_examples(args, args.task_name, tokenizer, evaluate=False, eval_from_train=True)
+        # train_dataset, TrainEval_dataset = load_and_cache_examples(args, args.task_name, tokenizer, evaluate=False, eval_from_train=True)
+        train_dataset = load_and_cache_examples(args, args.task_name, tokenizer, evaluate=False)
         # print('Constructing train_dataset done!')
         # print('')
         
         if teacher_model:
             # global_step, tr_loss = train(args, train_dataset, model, tokenizer, teacher_model)
-            train(args, train_dataset, TrainEval_dataset, model, tokenizer, teacher_model)
+            # train(args, train_dataset, TrainEval_dataset, model, tokenizer, teacher_model)
+            train(args, train_dataset, model, tokenizer, teacher_model)
         else:
-            train(args, train_dataset, TrainEval_dataset, model, tokenizer)
+            train(args, train_dataset, model, tokenizer)
 
         # logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
 
