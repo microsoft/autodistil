@@ -114,7 +114,7 @@ def batch_list_to_batch_tensors(features):
     return batch_tensors
 
 
-def train(args, train_dataset, model, tokenizer, teacher_model=None):
+def train(args, train_dataset, TrainEval_dataset, model, tokenizer, teacher_model=None):
     """ Train the model """
 
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
