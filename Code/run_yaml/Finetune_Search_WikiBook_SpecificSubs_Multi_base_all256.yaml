@@ -3,8 +3,8 @@ description: Finetune_Search_WikiBook_base_all256_RTE
 target:
   service: amlk8s
   # run "amlt target list amlk8s" to list the names of available AMLK8s targets
-  name: itphyperdgx2cl1
-  vc: hai3
+  name: itpeusp100cl
+  vc: resrchvc
 
 # target:
 #   service: amlk8s
@@ -37,7 +37,7 @@ code:
 
 data:
   local_dir:  /home/subho/workspace/philly_data
-  remote_dir: wikibookdata
+  remote_dir: wikidata
 
 storage:
   output:
@@ -55,7 +55,7 @@ search:
         --task_name {TASK_NAME}
         --do_train
         --data_dir $$PT_DATA_DIR/Data_GLUE/glue_data/{TASK_NAME}/
-        --model_dir $$PT_DATA_DIR/.../  # neat-oriole
+        --model_dir $$PT_DATA_DIR/KDNAS/neat-oriole-870k
         --output_dir $$PT_OUTPUT_DIR/
         --max_seq_length {Max_Seq_Length}
         --learning_rate {LR}
@@ -84,7 +84,7 @@ search:
       values: [32]
     - name: Num_Train_Epochs
       spec: discrete
-      values: [12]                  # [0.083, 0.167, 0.25, 0.333, 0.417, 0.5, 0.583, 0.667, 0.75 , 0.833, 0.917, 1.0 ]
+      values: [20]                  # [0.083, 0.167, 0.25, 0.333, 0.417, 0.5, 0.583, 0.667, 0.75 , 0.833, 0.917, 1.0 ]
     - name: Depth_Mult_List                    ## base = H, A, R, L = 32*18, 12, 4.0, 12 = 66,019,968
       spec: discrete
       values: ['0.75', '0.833', '0.917', '1.0']  

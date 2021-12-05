@@ -3,8 +3,8 @@ description: Finetune_Search_WikiBook_tiny_all256_RTE
 target:
   service: amlk8s
   # run "amlt target list amlk8s" to list the names of available AMLK8s targets
-  name: itphyperdgx2cl1
-  vc: hai3
+  name: itpeusp100cl
+  vc: resrchvc
 
 # target:
 #   service: amlk8s
@@ -37,7 +37,7 @@ code:
 
 data:
   local_dir:  /home/subho/workspace/philly_data
-  remote_dir: wikibookdata
+  remote_dir: wikidata
 
 storage:
   output:
@@ -55,7 +55,7 @@ search:
         --task_name {TASK_NAME}
         --do_train
         --data_dir $$PT_DATA_DIR/Data_GLUE/glue_data/{TASK_NAME}/
-        --model_dir $$PT_DATA_DIR/.../  # moved-troll 
+        --model_dir $$PT_DATA_DIR/KDNAS/moved-troll-epoch-13
         --output_dir $$PT_OUTPUT_DIR/
         --max_seq_length {Max_Seq_Length}
         --learning_rate {LR}
