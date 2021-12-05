@@ -114,7 +114,6 @@ def batch_list_to_batch_tensors(features):
     return batch_tensors
 
 
-# def train(args, train_dataset, TrainEval_dataset, model, tokenizer, teacher_model=None):
 def train(args, train_dataset, model, tokenizer, teacher_model=None):
     """ Train the model """
 
@@ -155,32 +154,15 @@ def train(args, train_dataset, model, tokenizer, teacher_model=None):
     set_seed(args)
 
     current_best = 0
-    current_best_TrainEval = 0
 
     best_acc = []
     best_acc_both = []
     best_results = []
 
-    list_acc = []
-    list_acc_both = []
-    list_results = []
-
     best_n_para = []
     best_n_flops = []
 
-    list_n_para = []
-    list_n_flops = []
-
-    best_acc_TrainEval = []
-    best_acc_both_TrainEval = []
-    best_results_TrainEval = []
-
-    list_acc_TrainEval = []
-    list_acc_both_TrainEval = []
-    list_results_TrainEval = []
-
     output_eval_file = os.path.join(args.output_dir, 'eval_results.txt')
-    output_eval_TrainEval_file = os.path.join(args.output_dir, 'eval_TrainEval_results.txt')
 
     epoch_training = 0
     for _ in train_iterator:
@@ -253,11 +235,9 @@ def train(args, train_dataset, model, tokenizer, teacher_model=None):
             # print('Evaluate: epoch_training is ', epoch_training)
             if args.evaluate_during_training:
                 acc = []
-                acc_TrainEval = []
 
                 if args.task_name == "mnli":   # for both MNLI-m and MNLI-mm
                     acc_both = []
-                    acc_both_TrainEval = []
 
                 # collect performance of all sub-networks
                 for depth_mult in sorted(args.depth_mult_list, reverse=True):
@@ -270,7 +250,6 @@ def train(args, train_dataset, model, tokenizer, teacher_model=None):
                                 model.apply(lambda m: setattr(m, 'intermediate_mult', intermediate_mult))
 
                                 results = evaluate(args, model, tokenizer)
-                                results_TrainEval = evaluate_Train(args, model, tokenizer, train_dataset)
 
                                 # print("results: ", results)
                                 n_para = cal_para_bert((depth_mult, width_mult, hidden_mult, intermediate_mult))
@@ -284,63 +263,27 @@ def train(args, train_dataset, model, tokenizer, teacher_model=None):
                                 # logger.info("num_para: %s ", n_para)
                                 # logger.info("num_FLOPs: %s ", n_flops)
                                 # logger.info("results: %s ", results)
-                                # logger.info("results_TrainEval: %s ", results_TrainEval)
                                 # logger.info("********** end evaluate results *********")
 
                                 acc.append(list(results.values())[0])
                                 if args.task_name == "mnli":
                                     acc_both.append(list(results.values())[0:2])
 
-                                acc_TrainEval.append(list(results_TrainEval.values())[0])
-                                if args.task_name == "mnli":
-                                    acc_both_TrainEval.append(list(results_TrainEval.values())[0:2])
-
-                # save eval results each epoch
-                if args.task_name == "mnli":
-                    # print("***best***{}\n".format(acc_both))
-                    list_acc_both.append(acc_both)
-                    list_n_para.append(n_para)
-                    list_n_flops.append(n_flops)
-                    list_results.append(results)
-
-                    list_acc_both_TrainEval.append(acc_both_TrainEval)
-                    list_results_TrainEval.append(results_TrainEval)
-
-                    with open(output_eval_file, "a") as writer:
-                        writer.write("{}, {}, {}\n".format(acc_both, n_para, n_flops))
-                    with open(output_eval_TrainEval_file, "a") as writer:
-                        writer.write("{}, {}, {}\n".format(acc_both_TrainEval, n_para, n_flops))
-
-                else:
-                    # print("***best***{}\n".format(acc))
-                    list_acc.append(acc)
-                    list_n_para.append(n_para)
-                    list_n_flops.append(n_flops)
-                    list_results.append(results)
-
-                    list_acc_TrainEval.append(acc_TrainEval)
-                    list_results_TrainEval.append(results_TrainEval)
-
-                    with open(output_eval_file, "a") as writer:
-                        writer.write("{}, {}, {}\n" .format(acc, n_para, n_flops))
-                    with open(output_eval_TrainEval_file, "a") as writer:
-                        writer.write("{}, {}, {}\n" .format(acc_TrainEval, n_para, n_flops))
-
                 # save model
                 if sum(acc) > current_best:
                     current_best = sum(acc)
-                    # if args.task_name == "mnli":
-                    #     # print("***best***{}\n".format(acc_both))
-                    #     best_acc_both, best_n_para, best_n_flops = acc_both, n_para, n_flops
-                    #     best_results = results
-                    #     with open(output_eval_file, "w") as writer:
-                    #         writer.write("{}, {}, {}\n".format(acc_both, n_para, n_flops))
-                    # else:
-                    #     # print("***best***{}\n".format(acc))
-                    #     best_acc, best_n_para, best_n_flops = acc, n_para, n_flops
-                    #     best_results = results
-                    #     with open(output_eval_file, "w") as writer:
-                    #         writer.write("{}, {}, {}\n" .format(acc, n_para, n_flops))
+                    if args.task_name == "mnli":
+                        # print("***best***{}\n".format(acc_both))
+                        best_acc_both, best_n_para, best_n_flops = acc_both, n_para, n_flops
+                        best_results = results
+                        with open(output_eval_file, "w") as writer:
+                            writer.write("{}, {}, {}\n".format(acc_both, n_para, n_flops))
+                    else:
+                        # print("***best***{}\n".format(acc))
+                        best_acc, best_n_para, best_n_flops = acc, n_para, n_flops
+                        best_results = results
+                        with open(output_eval_file, "w") as writer:
+                            writer.write("{}, {}, {}\n" .format(acc, n_para, n_flops))
 
                     # logger.info("Saving model checkpoint to %s", args.output_dir)
                     model_to_save = model.module if hasattr(model, 'module') else model
@@ -349,22 +292,13 @@ def train(args, train_dataset, model, tokenizer, teacher_model=None):
                     model_to_save.config.to_json_file(os.path.join(args.output_dir, CONFIG_NAME))
                     tokenizer.save_vocabulary(args.output_dir)
 
-
-                # # save eval_TrainEval results
-                # if sum(acc_TrainEval) > current_best_TrainEval:
-                #     current_best_TrainEval = sum(acc_TrainEval)
-                #     if args.task_name == "mnli":
-                #         # print("***best TrainEval***{}\n".format(acc_both_TrainEval))
-                #         best_acc_both_TrainEval, best_n_para, best_n_flops = acc_both_TrainEval, n_para, n_flops
-                #         best_results_TrainEval = results_TrainEval
-                #         with open(output_eval_TrainEval_file, "w") as writer:
-                #             writer.write("{}, {}, {}\n".format(acc_both_TrainEval, n_para, n_flops))
-                #     else:
-                #         # print("***best TrainEval***{}\n".format(acc_TrainEval))
-                #         best_acc_TrainEval, best_n_para, best_n_flops = acc_TrainEval, n_para, n_flops
-                #         best_results_TrainEval = results_TrainEval
-                #         with open(output_eval_TrainEval_file, "w") as writer:
-                #             writer.write("{}, {}, {}\n" .format(acc_TrainEval, n_para, n_flops))
+                    # print after each epoch
+                    if args.task_name == "mnli":
+                        print("***epoch best***{}, {}, {}\n".format(best_acc_both, best_n_para, best_n_flops))
+                        print("***epoch best_results***: %s ", best_results)
+                    else:
+                        print("***epoch best***{}, {}, {}\n".format(best_acc, best_n_para, best_n_flops))
+                        print("***epoch best_results***: %s ", best_results)
 
 
         #     if 0 < t_total < global_step:
@@ -395,12 +329,11 @@ def train(args, train_dataset, model, tokenizer, teacher_model=None):
         epoch_training += 1
 
     if args.task_name == "mnli":
-        print("***list performance*** {}, {}, {}\n".format(list_acc_both, list_acc_both_TrainEval, list_n_para, list_n_flops))
+        print("***final best***{}, {}, {}\n".format(best_acc_both, best_n_para, best_n_flops))
+        print("***final best_results***: %s ", best_results)
     else:
-        print("***list performance*** {}, {}, {}\n".format(list_acc, list_acc_TrainEval, list_n_para, list_n_flops))
-    
-    print("***list_results***: %s " % list_results)
-    print("***list_results_TrainEval***: %s " % list_results_TrainEval)
+        print("***final best***{}, {}, {}\n".format(best_acc, best_n_para, best_n_flops))
+        print("***final best_results***: %s ", best_results)
 
 
 def evaluate(args, model, tokenizer, prefix=""):
@@ -460,68 +393,6 @@ def evaluate(args, model, tokenizer, prefix=""):
             for key in sorted(result.keys()):
                 logger.info("  %s = %s", key, str(result[key]))
                 # writer.write("%s = %s\n" % (key, str(result[key])))
-            # writer.write("\n")
-    return results
-
-
-def evaluate_Train(args, model, tokenizer, Train_dataset, prefix=""):
-    """ Evaluate the model """
-    eval_task_names = ("mnli", "mnli-mm") if args.task_name == "mnli" else (args.task_name,)
-    eval_outputs_dirs = (args.output_dir, args.output_dir + 'MM') if args.task_name == "mnli" else (args.output_dir,)
-
-    results = {}
-    for eval_task, eval_output_dir in zip(eval_task_names, eval_outputs_dirs):
-        # eval_dataset = load_and_cache_examples(args, eval_task, tokenizer, evaluate=False, eval_from_train=True)
-        eval_dataset = Train_dataset
-
-        if not os.path.exists(eval_output_dir):
-            os.makedirs(eval_output_dir)
-
-        args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
-        eval_sampler = SequentialSampler(eval_dataset)
-        eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler,
-                                     batch_size=args.eval_batch_size)
-
-        eval_loss = 0.0
-        nb_eval_steps = 0
-        preds = None
-        out_label_ids = None
-        for batch in tqdm(eval_dataloader, desc="Evaluating_on_TrainEval"):
-            model.eval()
-            batch = tuple(t.to(args.device) for t in batch)
-
-            with torch.no_grad():
-                inputs = {'input_ids': batch[0], 'attention_mask': batch[1], 'labels': batch[3]}
-                if args.model_type != 'distilbert':
-                    inputs['token_type_ids'] = batch[2] if args.model_type in ['bert'] else None
-                outputs = model(**inputs)
-                tmp_eval_loss, logits = outputs[:2]
-
-                eval_loss += tmp_eval_loss.mean().item()
-            nb_eval_steps += 1
-            if preds is None:
-                preds = logits.detach().cpu().numpy()
-                out_label_ids = inputs['labels'].detach().cpu().numpy()
-            else:
-                preds = np.append(preds, logits.detach().cpu().numpy(), axis=0)
-                out_label_ids = np.append(out_label_ids, inputs['labels'].detach().cpu().numpy(), axis=0)
-
-        if args.output_mode == "classification":
-            preds = np.argmax(preds, axis=1)
-        elif args.output_mode == "regression":
-            preds = np.squeeze(preds)
-        result = compute_metrics(eval_task, preds, out_label_ids)
-        if eval_task == 'mnli-mm':
-            results.update({'acc_mm':result['acc']})
-        else:
-            results.update(result)
-
-        output_eval_file = os.path.join(eval_output_dir, "eval_TrainEval_results.txt") # wirte all the results to the same file
-        with open(output_eval_file, "a") as writer:
-            logger.info("***** Eval results {} *****".format(prefix))
-            for key in sorted(result.keys()):
-                logger.info("TrainEval  %s = %s", key, str(result[key]))
-                # writer.write("TrainEval %s = %s\n" % (key, str(result[key])))
             # writer.write("\n")
     return results
 
@@ -853,14 +724,12 @@ def main():
     if args.do_train:
         # print('')
         # print('Constructing train_dataset starts')
-        # train_dataset, TrainEval_dataset = load_and_cache_examples(args, args.task_name, tokenizer, evaluate=False, eval_from_train=True)
         train_dataset = load_and_cache_examples(args, args.task_name, tokenizer, evaluate=False)
         # print('Constructing train_dataset done!')
         # print('')
         
         if teacher_model:
             # global_step, tr_loss = train(args, train_dataset, model, tokenizer, teacher_model)
-            # train(args, train_dataset, TrainEval_dataset, model, tokenizer, teacher_model)
             train(args, train_dataset, model, tokenizer, teacher_model)
         else:
             train(args, train_dataset, model, tokenizer)
