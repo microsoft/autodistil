@@ -674,6 +674,8 @@ def main():
     # num_labels = len(label_list)
     if args.task_name == 'mnli':
         num_labels = len(label_list) - 1
+    elif args.task_name == 'sts-b':
+        num_labels = len(label_list) + 1
     else:
         num_labels = len(label_list)
 
