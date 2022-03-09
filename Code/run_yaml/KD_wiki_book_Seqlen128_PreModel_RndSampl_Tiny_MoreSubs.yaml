@@ -91,22 +91,22 @@ search:
       values: [4e-5] # [1e-5, 2e-5, 4e-5, 8e-5, 16e-5]
     - name: Per_GPU_Train_Batch_Size
       spec: discrete
-      values: [128] # [96]
+      values: [96]
     - name: Num_Train_Epochs
       spec: discrete
       values: [8] # 4
     - name: Depth_Mult_List
       spec: discrete
-      values: ['4/12,7/12,4'] # Layer (4-7)    ==>  (bellow)
+      values: ['4/12,12/12,9'] # Layer (4-7)    ==>  (bellow)
     - name: Width_Mult_List
       spec: discrete
-      values: ['7/12,10/12,4'] # Head (7-10)   ==>  (bellow)
+      values: ['6/12,12/12,7'] # Head (7-10)   ==>  (bellow)
     - name: Hidden_Mult_List
       spec: discrete
-      values: ['4/24,7/24,4'] # Hid (128-224)  ==>  (bellow)
+      values: ['4/24,8/24,5'] # Hid (128-224)  ==>  (bellow)
     - name: Intermediate_Mult_List
       spec: discrete
-      values: ['2.0,3.5,4'] # Ratio (2.0-3.5)  ==>  para_n (4,354,644-10,566,675.0) around
+      values: ['2.0,4,5'] # Ratio (2.0-3.5)  ==>  para_n (4,354,644-10,566,675.0) around
     - name: Depth_Lambda1
       spec: discrete
       values: [0.0]

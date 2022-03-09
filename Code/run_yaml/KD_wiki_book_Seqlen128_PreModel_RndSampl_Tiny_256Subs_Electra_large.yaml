@@ -56,7 +56,7 @@ search:
         --do_train
         --data_dir $$PT_DATA_DIR/Data_GLUE/glue_data/{TASK_NAME}/
         --pregenerated_data $$PT_DATA_DIR/hdf5_dataset/hdf5_lower_case_1_seq_len_128_max_pred_20_masked_lm_prob_0.15_random_seed_12345_dupe_factor_5/books_wiki_en_corpus/
-        --model_dir $$PT_DATA_DIR/Local_models/Electra-base
+        --model_dir $$PT_DATA_DIR/Local_models/Electra-large
         --output_dir $$PT_OUTPUT_DIR/
         --max_seq_length {Max_Seq_Length}
         --learning_rate {LR}
@@ -91,19 +91,19 @@ search:
       values: [4e-5] # [1e-5, 2e-5, 4e-5, 8e-5, 16e-5]
     - name: Per_GPU_Train_Batch_Size
       spec: discrete
-      values: [128] # [96]
+      values: [64]
     - name: Num_Train_Epochs
       spec: discrete
       values: [8] # 4
     - name: Depth_Mult_List
       spec: discrete
-      values: ['4/12,7/12,4'] # Layer (4-7)    ==>  (bellow)
+      values: ['4/24,7/24,4'] # Layer (4-7)    ==>  (bellow)
     - name: Width_Mult_List
       spec: discrete
-      values: ['7/12,10/12,4'] # Head (7-10)   ==>  (bellow)
+      values: ['7/16,10/16,4'] # Head (7-10)   ==>  (bellow)
     - name: Hidden_Mult_List
       spec: discrete
-      values: ['4/24,7/24,4'] # Hid (128-224)  ==>  (bellow)
+      values: ['4/32,7/32,4'] # Hid (128-224)  ==>  (bellow)
     - name: Intermediate_Mult_List
       spec: discrete
       values: ['2.0,3.5,4'] # Ratio (2.0-3.5)  ==>  para_n (4,354,644-10,566,675.0) around

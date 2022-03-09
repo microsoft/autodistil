@@ -21,6 +21,7 @@
 from __future__ import absolute_import, division, print_function
 
 import argparse
+import functools
 import logging
 import os
 import random, itertools
@@ -229,7 +230,7 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
         ]
     optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=1e-8)
     scheduler = WarmupLinearSchedule(optimizer, warmup_steps=args.warmup_steps, t_total=t_total)
-
+    teacher_config = model.config
 
     # if args.n_gpu > 1:
     #     print()
@@ -259,7 +260,7 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
             teacher_model = torch.nn.DataParallel(teacher_model)
     
     # prepare sub_nets
-    subs_para_sorted, subs_sorted = subs_para_range(args.depth_mult_list, args.width_mult_list, args.hidden_mult_list, args.intermediate_mult_list, args.start_size, args.stop_size, args.subs_num)
+    subs_para_sorted, subs_sorted = subs_para_range(teacher_config, args.depth_mult_list, args.width_mult_list, args.hidden_mult_list, args.intermediate_mult_list, args.start_size, args.stop_size, args.subs_num)
 
     # print('')
     # print('len(subs_sorted): ', len(subs_sorted))
@@ -410,7 +411,7 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
                         model.apply(lambda m: setattr(m, 'hidden_mult', subs_sampled[idx_sub][2]))
                         model.apply(lambda m: setattr(m, 'intermediate_mult', subs_sampled[idx_sub][3]))
 
-                        # print('model: ', model)
+                        print('model: ', model)
 
                         # stage 2: width- and depth- adaptive
                         if args.training_phase == 'dynabert':
@@ -1054,7 +1055,7 @@ class PregeneratedDataset(Dataset):
                 torch.tensor(int(self.is_nexts[item])))
 
 # BERT_base for GLUE
-def cal_para_bert(archi):
+def cal_para_bert(config, archi):
     # https://github.com/google-research/bert/issues/656
     # emb: 768*30522
     # att*12: 768x768*4*12
@@ -1062,13 +1063,13 @@ def cal_para_bert(archi):
     # pool: 768*768
     # pred: 768*2
     # L, A, H, R= 12, 12, 768, 4.0
-    L, A, H, R = archi[0]*12, archi[1]*12, archi[2]*768, archi[3]
-    return H*(30522+512+2+2) + (H*H+H*H*3*A/12+H*4+H*2)*L + (H*H*R*2+H*R+H+H*2)*L + H*H + H*2
+    L, A, H, R = archi[0]*config.num_hidden_layers, archi[1]*config.num_attention_heads, archi[2]*config.hidden_size, archi[3]
+    return H*(30522+512+2+2) + (H*H+H*H*3*A/config.num_attention_heads+H*4+H*2)*L + (H*H*R*2+H*R+H+H*2)*L + H*H + H*2
 
 
-def subs_para_range(depth_mult_list, width_mult_list, hidden_mult_list, intermediate_mult_list, start_size, stop_size, subs_num):
+def subs_para_range(config, depth_mult_list, width_mult_list, hidden_mult_list, intermediate_mult_list, start_size, stop_size, subs_num):
     subs = list(itertools.product(depth_mult_list, width_mult_list, hidden_mult_list, intermediate_mult_list))
-    subs_para = list(map(cal_para_bert, subs))
+    subs_para = list(map(functools.partial(cal_para_bert, config), subs))
     subs_para_sorted, subs_sorted = (list(t) for t in zip(*sorted(zip(subs_para, subs)))) # sort both subs_para and subs in terms of subs_para
     # all sub nets
     if subs_num == -1:
@@ -1310,7 +1311,7 @@ def main():
         teacher_model = None
 
     # load student model if necessary
-    model = model_class.from_pretrained(args.model_dir, config=config)
+    model = model_class.from_pretrained(args.model_dir, config=config, fit_size=config.hidden_size)
 
     # # print('model: ', model)
     # s = model.state_dict()
