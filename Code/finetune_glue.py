@@ -247,7 +247,7 @@ def train(args, train_dataset, model, tokenizer, teacher_model=None):
 
                                 results = evaluate(args, model, tokenizer)
                                 # print("results: ", results)
-                                n_para = cal_para_bert((depth_mult, width_mult, hidden_mult, intermediate_mult))
+                                n_para = cal_para_bert(model.config,(depth_mult, width_mult, hidden_mult, intermediate_mult))
                                 n_flops = cal_flops_bert((depth_mult, width_mult, hidden_mult, intermediate_mult, args.max_seq_length))
 
                                 # logger.info("********** start evaluate results *********")
@@ -505,7 +505,7 @@ def reorder_neuron_head(model, head_importance, neuron_importance):
         base_model.encoder.layer[layer].output.reorder_neurons(idx)
 
 # BERT_base for GLUE
-def cal_para_bert(archi):
+def cal_para_bert(config, archi):
     # https://github.com/google-research/bert/issues/656
     # emb: 768*30522
     # att*12: 768x768*4*12
@@ -513,8 +513,9 @@ def cal_para_bert(archi):
     # pool: 768*768
     # pred: 768*2
     # L, A, H, R= 12, 12, 768, 4.0
-    L, A, H, R = archi[0]*12, archi[1]*12, archi[2]*768, archi[3]
-    return H*(30522+512+2+2) + (H*H+H*H*3*A/12+H*4+H*2)*L + (H*H*R*2+H*R+H+H*2)*L + H*H + H*2
+    L, A, H, R = archi[0] * config.num_hidden_layers, archi[1] * config.num_attention_heads, archi[
+        2] * config.hidden_size, archi[3]
+    return H*(30522+512+2+2) + (H*H+H*H*3*A/config.num_attention_heads+H*4+H*2)*L + (H*H*R*2+H*R+H+H*2)*L + H*H + H*2
 
 # BERT_base for GLUE
 def cal_flops_bert(archi):
@@ -663,18 +664,18 @@ def main():
 
     # load teacher model if necessary
     if args.training_phase == 'dynabertw' or args.training_phase == 'dynabert':
-        teacher_model = model_class.from_pretrained(args.model_dir, config=config)
+        teacher_model = model_class.from_pretrained(args.model_dir, config=config, fit_size=config.hidden_size)
         teacher_model.to(args.device)
     else:
         teacher_model = None
 
     # load student model if necessary
-    model = model_class.from_pretrained(args.model_dir, config=config)
+    model = model_class.from_pretrained(args.model_dir, config=config, fit_size=config.hidden_size)
     # print('model: ', model)
     s = model.state_dict()
     s = {k:v for k,v in s.items() if not k.startswith('classifier')}
     config.num_labels = len(label_list)
-    model = model_class.from_pretrained(None, config=config, state_dict=s)
+    model = model_class.from_pretrained(None, config=config, state_dict=s, fit_size=config.hidden_size)
     # print('model: ', model)
 
     # # if args.training_phase == 'dynabertw':
