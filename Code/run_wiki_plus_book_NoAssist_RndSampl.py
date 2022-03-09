@@ -169,8 +169,8 @@ def train(args, model, tokenizer, teacher_model=None, samples_per_epoch=None, nu
     files = [os.path.join(args.pregenerated_data, f) for f in os.listdir(args.pregenerated_data) if os.path.isfile(os.path.join(args.pregenerated_data, f)) and 'training' in f]
     files.sort()
     num_files = len(files) # num_files=256 for training files
-    num_sub_parts = 4
-    step_files = int(num_files / num_sub_parts) # int(num_files / args.num_train_epochs)
+    # num_sub_parts = 4
+    # step_files = int(num_files / num_sub_parts) # int(num_files / args.num_train_epochs)
 
     # total_train_examples = 0
     # # for epoch in np.arange(args.num_train_epochs):
