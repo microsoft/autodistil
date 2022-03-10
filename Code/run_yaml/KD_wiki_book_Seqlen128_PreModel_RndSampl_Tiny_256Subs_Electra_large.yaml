@@ -97,7 +97,7 @@ search:
       values: [8] # 4
     - name: Depth_Mult_List
       spec: discrete
-      values: ['4/24,7/24,4'] # Layer (4-7)    ==>  (bellow)
+      values: ['4/24,7/24,4'] # Layer (4-7)    ==>  (bellow) -> [4/24, 5/24 ---- 7/24]
     - name: Width_Mult_List
       spec: discrete
       values: ['7/16,10/16,4'] # Head (7-10)   ==>  (bellow)

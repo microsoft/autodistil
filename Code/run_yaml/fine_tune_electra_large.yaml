@@ -3,23 +3,11 @@ description: Electra-large-cute-donkey-original-code
 target:
   service: amlk8s
   # run "amlt target list amlk8s" to list the names of available AMLK8s targets
-  name: itpscusv100cl #itplabrr1cl1
+  name: itplabrr1cl1 #itpscusv100cl
   vc: resrchvc
 
-# target:
-#   service: amlk8s
-#   # run "amlt target list amlk8s" to list the names of available AMLK8s targets
-#   name: itplabrr1cl1
-#   vc: resrchvc
-
-# target:
-#   service: amlk8s
-#   # run "amlt target list amlk8s" to list the names of available AMLK8s targets
-#   name: itpeastusv100cl2
-#   vc: resrchvc
-
 environment:
-  image: pytorch/pytorch:1.4-cuda10.1-cudnn7-devel # pytorch/pytorch:1.0.1-cuda10.0-cudnn7-devel, 1.4-cuda10.1-cudnn7-devel, 1.6.0-cuda10.1-cudnn7-devel
+  image: pytorch/pytorch:1.5-cuda10.1-cudnn7-devel # pytorch/pytorch:1.0.1-cuda10.0-cudnn7-devel, 1.4-cuda10.1-cudnn7-devel, 1.6.0-cuda10.1-cudnn7-devel
   setup:
     - pip install -r requirements.txt
     - pip install --user boto3
@@ -55,7 +43,7 @@ search:
         --do_train
         --data_dir $$PT_DATA_DIR/Data_GLUE/glue_data/{TASK_NAME}/
         --model_dir  $$PT_DATA_DIR/Local_models/custom_models/subho-pretrained-model-run-cute-donkey-step-400000/
-        --output_dir $$PT_DATA_DIR/../projects/kdnas/amlt-results/cute-donkey
+        --output_dir $$PT_DATA_DIR/../projects/kdnas/amlt-results/cute_donkey_original_code
         --max_seq_length {Max_Seq_Length}
         --learning_rate {LR}
         --per_gpu_train_batch_size {Per_GPU_Train_Batch_Size}
@@ -86,13 +74,13 @@ search:
       values: [12]                  # [0.083, 0.167, 0.25, 0.333, 0.417, 0.5, 0.583, 0.667, 0.75 , 0.833, 0.917, 1.0 ]
     - name: Depth_Mult_List                    ## base = H, A, R, L = 32*18, 12, 4.0, 12 = 66,019,968
       spec: discrete
-      values: ['0.75', '0.833', '0.917', '1.0']
+      values: ['0.166667', '0.2083333', '0.25', '0.2916666667'] #['4/24,7/24,4']
     - name: Width_Mult_List
       spec: discrete
-      values: ['0.75', '0.833', '0.917', '1.0']
+      values: ['0.4375', '0.5', '0.5625', '0.625'] #['7/16,10/16,4']
     - name: Hidden_Mult_List
       spec: discrete
-      values: ['0.708', '0.75', '0.792', '0.833']
+      values: ['0.125', '0.15625', '0.1875', '0.21875']  #['4/32,7/32,4']
     - name: Intermediate_Mult_List
       spec: discrete
       values: ['2.5', '3.0', '3.5', '4.0']

@@ -45,6 +45,11 @@ from transformers import glue_convert_examples_to_features as convert_examples_t
 
 import sys
 
+from azureml.core import Run
+
+run = Run.get_context()
+
+
 logger = logging.getLogger(__name__)
 CONFIG_NAME = "config.json"
 WEIGHTS_NAME = "pytorch_model.bin"
@@ -225,6 +230,8 @@ def train(args, train_dataset, model, tokenizer, teacher_model=None):
                 scheduler.step()  # Update learning rate schedule
                 model.zero_grad()
                 global_step += 1
+                if args.local_rank in [-1, 0]:
+                    run.log("loss", loss.item())
 
         # evaluate
         # if global_step > 0 and args.logging_steps > 0 and global_step % args.logging_steps == 0:
@@ -263,6 +270,8 @@ def train(args, train_dataset, model, tokenizer, teacher_model=None):
                                 acc.append(list(results.values())[0])
                                 if args.task_name == "mnli":
                                     acc_both.append(list(results.values())[0:2])
+                                if args.local_rank in [-1, 0]:
+                                    run.log("val_acc", acc[0])
 
                 # save model
                 if sum(acc) > current_best:
@@ -281,11 +290,12 @@ def train(args, train_dataset, model, tokenizer, teacher_model=None):
                             writer.write("{}, {}, {}\n" .format(acc, n_para, n_flops))
 
                     # logger.info("Saving model checkpoint to %s", args.output_dir)
-                    model_to_save = model.module if hasattr(model, 'module') else model
-                    model_to_save.save_pretrained(args.output_dir)
-                    torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))
-                    model_to_save.config.to_json_file(os.path.join(args.output_dir, CONFIG_NAME))
-                    tokenizer.save_vocabulary(args.output_dir)
+                    # model_to_save = model.module if hasattr(model, 'module') else model
+                    # model_to_save.save_pretrained(args.output_dir)
+                    # torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))
+                    # model_to_save.config.to_json_file(os.path.join(args.output_dir, CONFIG_NAME))
+                    # tokenizer.save_vocabulary(args.output_dir)
+
 
         #     if 0 < t_total < global_step:
         #         epoch_iterator.close()
