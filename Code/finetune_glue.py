@@ -528,7 +528,7 @@ def cal_para_bert(config, archi):
     return H*(30522+512+2+2) + (H*H+H*H*3*A/config.num_attention_heads+H*4+H*2)*L + (H*H*R*2+H*R+H+H*2)*L + H*H + H*2
 
 # BERT_base for GLUE
-def cal_flops_bert(archi):
+def cal_flops_bert(archi, config):
     # emb: 768*30522
     # att*12: 768x768*4*12
     # ff*12: 768x768*4*2*12
@@ -537,7 +537,8 @@ def cal_flops_bert(archi):
     # L, A, H, R= 12, 12, 768, 4.0
     # n = 128
 
-    L, A, H, R, n = archi[0]*12, archi[1]*12, archi[2]*768, archi[3], archi[4]
+    L, A, H, R, n = archi[0] * config.num_hidden_layers, archi[1] * config.num_attention_heads, archi[
+        2] * config.hidden_size, archi[3], archi[4]
     return (n*3*H*H*(A/12) + n*n*(A/12)*H*2 + n*H*H + n*2*R*H*H)*L + n*H*H + 2*H
 
 def main():
