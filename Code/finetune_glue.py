@@ -255,7 +255,7 @@ def train(args, train_dataset, model, tokenizer, teacher_model=None):
                                 results = evaluate(args, model, tokenizer)
                                 # print("results: ", results)
                                 n_para = cal_para_bert(model.config,(depth_mult, width_mult, hidden_mult, intermediate_mult))
-                                n_flops = cal_flops_bert((depth_mult, width_mult, hidden_mult, intermediate_mult, args.max_seq_length))
+                                n_flops = cal_flops_bert(model.config,(depth_mult, width_mult, hidden_mult, intermediate_mult, args.max_seq_length))
 
                                 # logger.info("********** start evaluate results *********")
                                 # logger.info("depth_mult: %s ", depth_mult)
@@ -525,10 +525,10 @@ def cal_para_bert(config, archi):
     # L, A, H, R= 12, 12, 768, 4.0
     L, A, H, R = archi[0] * config.num_hidden_layers, archi[1] * config.num_attention_heads, archi[
         2] * config.hidden_size, archi[3]
-    return H*(30522+512+2+2) + (H*H+H*H*3*A/config.num_attention_heads+H*4+H*2)*L + (H*H*R*2+H*R+H+H*2)*L + H*H + H*2
+    return H*(config.vocab_size+config.max_position_embeddings+2+2) + (H*H+H*H*3+H*4+H*2)*L + (H*H*R*2+H*R+H+H*2)*L + H*H + H*2
 
 # BERT_base for GLUE
-def cal_flops_bert(archi, config):
+def cal_flops_bert(config, archi):
     # emb: 768*30522
     # att*12: 768x768*4*12
     # ff*12: 768x768*4*2*12
@@ -539,7 +539,7 @@ def cal_flops_bert(archi, config):
 
     L, A, H, R, n = archi[0] * config.num_hidden_layers, archi[1] * config.num_attention_heads, archi[
         2] * config.hidden_size, archi[3], archi[4]
-    return (n*3*H*H*(A/12) + n*n*(A/12)*H*2 + n*H*H + n*2*R*H*H)*L + n*H*H + 2*H
+    return (n*3*H*H + n*n*H*2 + n*H*H + n*2*R*H*H)*L + n*H*H + 2*H
 
 def main():
     parser = argparse.ArgumentParser()
