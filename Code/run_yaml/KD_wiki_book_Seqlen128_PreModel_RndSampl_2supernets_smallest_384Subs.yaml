@@ -1,4 +1,4 @@
-description: KD_wiki_plus_book_seqlen128_PreModel_2supernets_big_384Subs
+description: KD_wiki_plus_book_seqlen128_PreModel_2supernets_smallest_384Subs
 
 target:
   service: amlk8s
@@ -77,7 +77,7 @@ search:
         --max_predictions_per_seq {Max_Predictions_Per_Seq}
         --save_checkpoint_steps {Save_Checkpoint_Steps}
   type: grid
-  max_trials: 50
+  max_trials: 100
   # parallel_trials: 2 ???
   params:
     - name: TASK_NAME
@@ -100,13 +100,13 @@ search:
       values: ['7/12,12/12,6'] # Layer (7-12)    ==>  (bellow)
     - name: Width_Mult_List
       spec: discrete
-      values: ['9/12,12/12,4'] # Head (9-12)     ==>  (bellow)
+      values: ['7/12,10/12,4'] # Head (7-10)   ==>  (bellow)
     - name: Hidden_Mult_List
       spec: discrete
-      values: ['17/24,20/24,4'] # Hid (544-640)  ==>  (bellow)
+      values: ['4/24,7/24,4'] # Hid (128-224)  ==>  (bellow)
     - name: Intermediate_Mult_List
       spec: discrete
-      values: ['2.5,4.0,4'] # Ratio (2.5-4.0)    ==>   para_n
+      values: ['2.0,3.5,4'] # Ratio (2.0-3.5)  ==>  para_n 
     - name: Depth_Lambda1
       spec: discrete
       values: [0.0]
